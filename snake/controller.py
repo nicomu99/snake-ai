@@ -9,17 +9,17 @@ class Controller:
         self.model = Model()
 
         # set up the view
-        root = Tk()
-        root.title("Snake")
-        root.columnconfigure(0, weight=1)
-        root.rowconfigure(0, weight=1)
+        # root = Tk()
+        # root.title("Snake")
+        # root.columnconfigure(0, weight=1)
+        # root.rowconfigure(0, weight=1)
+        #
+        # self.view = View(root, self.model.snake_position, self.model.price_position, self)
+        # self.view.grid(column=0, row=0, sticky='N W E S')
 
-        self.view = View(root, self.model.snake_position, self.model.price_position, self)
-        self.view.grid(column=0, row=0, sticky='N W E S')
-
-        root.geometry(f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}x"
-                      f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}")
-        root.mainloop()
+        # root.geometry(f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}x"
+        #              f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}")
+        # root.mainloop()
 
     def perform_move(self, direction):
         # TODO: Implement the correct return in the model
