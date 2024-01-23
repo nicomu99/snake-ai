@@ -22,7 +22,6 @@ class Controller:
         # root.mainloop()
 
     def perform_move(self, direction):
-        # TODO: Implement the correct return in the model
         reward, state = self.model.perform_move(direction)
         return reward, state
 
