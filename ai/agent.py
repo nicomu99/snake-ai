@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from snake.utils import Utils
 from snake.controller import Controller
+from threading import Thread
 
 # This file was created using the following tutorial book:
 # Hands-On Machine Learning with Scikit-Learn, Keras and TensorFlow by Aurelien Geron
@@ -15,15 +16,16 @@ class Agent:
         self.controller = Controller()
 
         self.model = tf.keras.models.Sequential([
-            tf.keras.layers.Flatten(input_shape=(self.input_space, self.input_space)),
-            tf.keras.layers.Dense(128, activation='relu'),
-            tf.keras.layers.Dense(4)
+            tf.keras.layers.Dense(100, activation='relu', name="input"),
+            tf.keras.layers.Dense(4, activation='softmax', name="output")
         ])
 
-        self.optimizer = tf.keras.optimizers.Adam(lr=0.01)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
 
         print("Training Agent")
         for it in range(100):
+            message = f"\rIteration {it+1}/100"
+            print(message, end="", sep=" ", flush=True)
             rewards, grads = self.play(1, 100)
             discounted_normalized_rewards = self.discount_and_normalize_rewards(rewards, discount_rate=0.95)
 
@@ -36,11 +38,15 @@ class Agent:
                          for step, discounted_normalized_reward in enumerate(rewards)], axis=0))
             self.optimizer.apply_gradients(zip(mean_grads, self.model.trainable_variables))
 
+        print("Agent Trained")
+
     def play_one_step(self, state):
         with tf.GradientTape() as tape:
             q_values = self.model(state)
-            action = tf.argmax(q_values, axis=1)
-            loss = tf.reduce_mean(tf.square(action - q_values))
+            # set the index of the highest value to 1 and the rest to 0
+            action = tf.one_hot(tf.argmax(q_values, axis=1), 4)
+            action = tf.cast(action, tf.float32)
+            loss = tf.reduce_mean(tf.keras.losses.binary_crossentropy(action, q_values))
         grads = tape.gradient(loss, self.model.trainable_variables)
 
         # make a move based on the q values and get the reward and new state
@@ -55,6 +61,7 @@ class Agent:
             current_grads = []
             state = self.controller.model.get_state()
             for step in range(n_max_steps):
+                state = np.array(state).reshape(1, self.input_space * self.input_space)
                 reward, state, grad = self.play_one_step(state)
                 current_rewards.append(reward)
                 current_grads.append(grad)
