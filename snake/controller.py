@@ -17,18 +17,14 @@ class Controller:
         self.view = View(root, self.model.snake_position, self.model.price_position, self)
         self.view.grid(column=0, row=0, sticky='N W E S')
 
-        root.geometry(f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}x{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}")
+        root.geometry(f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}x"
+                      f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}")
         root.mainloop()
 
     def perform_move(self, direction):
         self.model.perform_move(direction)
-        print(self.model.lost)
         if not self.model.lost:
             self.view.draw_snake(self.model.snake_position)
             self.view.draw_price(self.model.price_position)
         else:
             self.view.show_game_over_message(self.model.score)
-
-
-if __name__ == '__main__':
-    Controller()
