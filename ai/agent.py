@@ -9,14 +9,7 @@ from snake.controller import Controller
 
 class Agent:
     def __init__(self):
-        # this is the agent implementing reiforcement learning
-        # I need: a reward
-        # Each move we put in the current state and let the neural net decide where to go
-        # if the neural network makes a mistake we have to
-
-        # action space: 4 actions, UP DOWN LEFT RIGHT
-        # state space: 10x10 grid, 100 tiles in total
-        # reward: 1 for eating, -1 for dying, 0 for moving
+        print("Initializing Agent")
 
         self.input_space = Utils.TILE_COUNT.value
         self.controller = Controller()
@@ -29,6 +22,7 @@ class Agent:
 
         self.optimizer = tf.keras.optimizers.Adam(lr=0.01)
 
+        print("Training Agent")
         for it in range(100):
             rewards, grads = self.play(1, 100)
             discounted_normalized_rewards = self.discount_and_normalize_rewards(rewards, discount_rate=0.95)
