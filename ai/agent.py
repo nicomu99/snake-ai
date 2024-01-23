@@ -13,7 +13,7 @@ class Agent:
         print("Initializing Agent")
 
         self.input_space = Utils.TILE_COUNT.value
-        self.controller = Controller()
+        self.controller = Controller(show_gui=False)
 
         self.model = tf.keras.models.Sequential([
             tf.keras.layers.Dense(100, activation='relu', name="input"),

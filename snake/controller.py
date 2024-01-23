@@ -6,21 +6,29 @@ from threading import Thread
 
 
 class Controller:
-    def __init__(self):
+    def __init__(self, show_gui=True):
         print("Initializing Controller")
         self.model = Model()
+        self.show_gui = show_gui
+        self.view = None
 
+        if self.show_gui:
+            self.setup_gui()
+
+    def setup_gui(self):
         # set up the view
-        self.root = Tk()
-        self.root.title("Snake")
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        root = Tk()
+        root.title("Snake")
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(0, weight=1)
 
-        self.view = View(self.root, self.model.snake_position, self.model.price_position, self)
+        self.view = View(root, self.model.snake_position, self.model.price_position, self)
         self.view.grid(column=0, row=0, sticky='N W E S')
 
-        self.root.geometry(f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}x"
-                           f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}")
+        root.geometry(f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}x"
+                      f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}")
+
+        root.mainloop()
 
     def perform_move(self, direction):
         # refactor the direction to "UP", "DOWN", "LEFT", "RIGHT"
@@ -34,11 +42,12 @@ class Controller:
             direction = "RIGHT"
 
         reward, state = self.model.perform_move(direction)
-        if not self.model.lost:
-            self.view.draw_snake(self.model.snake_position)
-            self.view.draw_price(self.model.price_position)
-        else:
-            self.view.show_game_over_message(self.model.score)
+        if self.show_gui:
+            if not self.model.lost:
+                self.view.draw_snake(self.model.snake_position)
+                self.view.draw_price(self.model.price_position)
+            else:
+                self.view.show_game_over_message(self.model.score)
         return reward, state
 
 
