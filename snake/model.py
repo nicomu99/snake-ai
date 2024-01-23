@@ -38,13 +38,20 @@ class Model:
         # add new square to snake
         self.snake_position.append(self.last_snake_position)
 
+    def get_state(self):
+        state = [[0 for _ in range(Utils.TILE_COUNT.value)] for _ in range(Utils.TILE_COUNT.value)]
+        for pos in self.snake_position:
+            state[pos[0]][pos[1]] = 1
+        state[self.price_position[0]][self.price_position[1]] = 2
+        return state
+
     def perform_move(self, direction):
         # update the current direction
         if (self.direction == "DOWN" and direction == "UP" or
                 self.direction == "RIGHT" and direction == "LEFT" or
                 self.direction == "UP" and direction == "DOWN" or
                 self.direction == "LEFT" and direction == "RIGHT"):
-            return self.lost
+            return -1, self.get_state()
 
         self.last_snake_position = copy.copy(self.snake_position[-1])
 
@@ -71,11 +78,11 @@ class Model:
         if self.is_price_collision():
             self.handle_collision()
             self.score += 1
-            return self.lost
+            return +1, self.get_state()
 
         # check collision with snake
         if self.is_snake_collision():
             self.game_over()
-            return self.lost
+            return -20, self.get_state()
 
-        return self.lost
+        return 0, self.get_state()
