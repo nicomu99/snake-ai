@@ -22,9 +22,12 @@ class Controller:
         root.mainloop()
 
     def perform_move(self, direction):
-        self.model.perform_move(direction)
-        if not self.model.lost:
-            self.view.draw_snake(self.model.snake_position)
-            self.view.draw_price(self.model.price_position)
-        else:
-            self.view.show_game_over_message(self.model.score)
+        # TODO: Implement the correct return in the model
+        reward, state = self.model.perform_move(direction)
+        return reward, state
+
+        # if not self.model.lost:
+        #     self.view.draw_snake(self.model.snake_position)
+        #     self.view.draw_price(self.model.price_position)
+        # else:
+        #     self.view.show_game_over_message(self.model.score)
