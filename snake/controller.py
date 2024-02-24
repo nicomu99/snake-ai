@@ -28,18 +28,21 @@ class Controller:
         root.geometry(f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}x"
                       f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}")
 
-        root.mainloop()
+    def run_gui(self):
+        # run the gui
+        self.view.mainloop()
 
     def perform_move(self, direction):
         # refactor the direction to "UP", "DOWN", "LEFT", "RIGHT"
-        if direction[0][0] == 1:
-            direction = "UP"
-        elif direction[0][1] == 1:
-            direction = "DOWN"
-        elif direction[0][2] == 1:
-            direction = "LEFT"
-        elif direction[0][3] == 1:
-            direction = "RIGHT"
+        if type(direction) != str:
+            if direction[0][0] == 1:
+                direction = "UP"
+            elif direction[0][1] == 1:
+                direction = "DOWN"
+            elif direction[0][2] == 1:
+                direction = "LEFT"
+            elif direction[0][3] == 1:
+                direction = "RIGHT"
 
         reward, state = self.model.perform_move(direction)
         if self.show_gui:
