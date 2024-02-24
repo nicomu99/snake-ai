@@ -23,10 +23,10 @@ class Agent:
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
 
         print("Training Agent")
-        for it in range(100):
-            message = f"\rIteration {it+1}/100"
+        for it in range(50):
+            message = f"\rIteration {it+1}/50"
             print(message, end="", sep=" ", flush=True)
-            rewards, grads = self.play(1, 100)
+            rewards, grads = self.play(1, 50)
             discounted_normalized_rewards = self.discount_and_normalize_rewards(rewards, discount_rate=0.95)
 
             mean_grads = []
@@ -84,3 +84,11 @@ class Agent:
         reward_mean = flat_rewards.mean()
         reward_std = flat_rewards.std()
         return [(discounted_reward - reward_mean) / reward_std for discounted_reward in discounted_rewards]
+
+    def get_move(self, state):
+        state = np.array(state).reshape(1, self.input_space * self.input_space)
+        q_values = self.model(state)
+        # set the index of the highest value to 1 and the rest to 0
+        action = tf.one_hot(tf.argmax(q_values, axis=1), 4)
+        action = tf.cast(action, tf.float32)
+        return action
