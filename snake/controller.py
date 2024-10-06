@@ -26,6 +26,8 @@ class Controller:
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
+        root.bind("<KeyPress>", self.move)
+
         self.view = View(root, self.model.snake_position, self.model.price_position, self)
         self.view.grid(column=0, row=0, sticky='N W E S')
 
@@ -44,6 +46,16 @@ class Controller:
         # run the gui
         self.show_gui = True
         self.view.mainloop()
+
+    def move(self, event):
+        if event.keysym == "w":
+            self.perform_move("UP")
+        elif event.keysym == "s":
+            self.perform_move("DOWN")
+        elif event.keysym == "a":
+            self.perform_move("LEFT")
+        elif event.keysym == "d":
+            self.perform_move("RIGHT")
 
     def perform_move(self, direction):
         # refactor the direction to "UP", "DOWN", "LEFT", "RIGHT"

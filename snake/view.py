@@ -8,7 +8,6 @@ from tkinter import messagebox
 class View(Canvas):
     def __init__(self, parent, snake_position, price_position, controller, **kwargs):
         super().__init__(parent, **kwargs)
-        parent.bind("<KeyPress>", self.move)
 
         # Create Background
         for i in range(Utils.TILE_COUNT.value):
@@ -86,12 +85,4 @@ class View(Canvas):
     def calculate_position(tile_id):
         return tile_id * Utils.TILE_SIZE.value
 
-    def move(self, event):
-        if event.keysym == "w":
-            self.controller.perform_move("UP")
-        elif event.keysym == "s":
-            self.controller.perform_move("DOWN")
-        elif event.keysym == "a":
-            self.controller.perform_move("LEFT")
-        elif event.keysym == "d":
-            self.controller.perform_move("RIGHT")
+
