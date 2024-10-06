@@ -17,15 +17,15 @@ class Agent:
             tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
             tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(128, activation='relu'),
-            tf.keras.layers.Dense(4, activation='linear')  # Linear activation for Q-values
+            tf.keras.layers.Dense(4, activation='linear')
         ])
 
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-        self.experience_replay = deque(maxlen=10000)  # Use deque for efficient buffer management
+        self.experience_replay = deque(maxlen=10000)
         self.batch_size = 64
-        self.epsilon = 1.0  # Initial exploration rate
-        self.epsilon_decay = 0.99  # Decay rate for exploration probability
-        self.epsilon_min = 0.1  # Minimum exploration probability
+        self.epsilon = 1.0
+        self.epsilon_decay = 0.99
+        self.epsilon_min = 0.1
         self.gamma = 0.95
 
         # Initialize the target model
@@ -33,14 +33,13 @@ class Agent:
         self.target_model.set_weights(self.model.get_weights())
 
         # Variables for updating the target model periodically
-        self.update_target_steps = 1000  # Update target model every 1000 steps
-        self.steps = 0  # Counter for steps taken
+        self.update_target_steps = 1000
+        self.steps = 0
 
     def train_or_load_model(self, controller):
         # Try to load an existing model
         try:
             self.model = tf.keras.models.load_model("model.keras")
-            # Load the weights into the target model as well
             self.target_model.set_weights(self.model.get_weights())
             print("Model Loaded")
             return
@@ -60,13 +59,12 @@ class Agent:
         controller.reset()
 
     def play_one_step(self, state, controller):
-        # Ensure state has the correct shape
-        state = np.expand_dims(state, axis=0)  # Shape: (1, grid_size, grid_size, 3)
+        state = np.expand_dims(state, axis=0)
         if np.random.rand() < self.epsilon:
-            action = np.random.randint(4)  # Explore: select a random action
+            action = np.random.randint(4)  # Select random action
         else:
             q_values = self.model(state)
-            action = tf.argmax(q_values, axis=1).numpy()[0]  # Exploit: select the action with max Q-value
+            action = tf.argmax(q_values, axis=1).numpy()[0]
 
         reward, new_state, done = controller.perform_move(action)
 
@@ -81,9 +79,8 @@ class Agent:
                 self.store_experience(state, action, reward, next_state, done)
                 state = next_state
                 total_reward += reward
-                self.steps += 1  # Increment step counter
+                self.steps += 1
 
-                # Train the model if enough experiences are gathered
                 if len(self.experience_replay) >= self.batch_size:
                     self.train_from_experience()
 
@@ -112,7 +109,6 @@ class Agent:
         batch = self.sample_experience()
         states, actions, rewards, next_states, dones = zip(*batch)
 
-        # Convert to tensors with correct data types
         states = tf.convert_to_tensor(np.array(states), dtype=tf.float32)
         next_states = tf.convert_to_tensor(np.array(next_states), dtype=tf.float32)
         rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
@@ -133,15 +129,12 @@ class Agent:
         target_q_values = rewards + (1 - dones) * self.gamma * max_next_q_values
 
         with tf.GradientTape() as tape:
-            # Get the predicted Q-values for the current states and actions
             q_values = self.model(states)
             indices = tf.stack([tf.range(self.batch_size, dtype=tf.int32), actions], axis=1)
             predicted_q_values = tf.gather_nd(q_values, indices)
 
-            # Compute the loss between target and predicted Q-values
             loss = tf.reduce_mean(tf.square(target_q_values - predicted_q_values))
 
-        # Compute gradients and update the main model's weights
         grads = tape.gradient(loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
@@ -150,7 +143,6 @@ class Agent:
             self.update_target_model()
 
     def get_move(self, state):
-        # Ensure state has the correct shape
         state = np.expand_dims(state, axis=0)
         q_values = self.model(state)
         action = tf.argmax(q_values, axis=1).numpy()[0]

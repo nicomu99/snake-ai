@@ -82,7 +82,8 @@ class Model:
 
         return state
 
-    def get_wrapped_distance(self, pos1, pos2):
+    @staticmethod
+    def get_wrapped_distance(pos1, pos2):
         grid_size = Utils.TILE_COUNT.value
         dx = abs(pos1[0] - pos2[0])
         dy = abs(pos1[1] - pos2[1])
@@ -155,6 +156,7 @@ class Model:
         reward -= 0.1
 
         # Add logging
-        # print(f"Action: {direction}, Reward: {reward}, Position: {self.snake_position[0]}, Treasure: {self.price_position}")
-        return reward, self.get_state(), self.lost
+        # print(f"Action: {direction}, Reward: {reward}, \
+        # Position: {self.snake_position[0]}, Treasure: {self.price_position}")
 
+        return reward, self.get_state(), self.lost
