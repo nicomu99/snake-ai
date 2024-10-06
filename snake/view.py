@@ -1,6 +1,4 @@
 from tkinter import *
-# from tkinter import ttk
-import numpy as np
 from utils import Utils
 from tkinter import messagebox
 
@@ -13,12 +11,8 @@ class View(Canvas):
         for i in range(Utils.TILE_COUNT.value):
             for j in range(Utils.TILE_COUNT.value):
                 self.create_rectangle(
-                    (
-                        self.calculate_position(i),
-                        self.calculate_position(j),
-                        self.calculate_position(i + 1),
-                        self.calculate_position(j + 1)
-                    ),
+                    self.calculate_position(i), self.calculate_position(j),
+                    self.calculate_position(i + 1), self.calculate_position(j + 1),
                     fill="white"
                 )
 
@@ -26,19 +20,15 @@ class View(Canvas):
 
         snake_posx, snake_posy = snake_position[0]
         self.snake_rect_ids = [self.create_rectangle(
-            self.calculate_position(snake_posx),
-            self.calculate_position(snake_posy),
-            self.calculate_position(snake_posx + 1),
-            self.calculate_position(snake_posy + 1),
+            self.calculate_position(snake_posx), self.calculate_position(snake_posy),
+            self.calculate_position(snake_posx + 1), self.calculate_position(snake_posy + 1),
             fill="red"
         )]
 
         price_posx, price_posy = price_position
         self.price_rect_id = self.create_rectangle(
-            self.calculate_position(price_posx),
-            self.calculate_position(price_posy),
-            self.calculate_position(price_posx + 1),
-            self.calculate_position(price_posy + 1),
+            self.calculate_position(price_posx), self.calculate_position(price_posy),
+            self.calculate_position(price_posx + 1), self.calculate_position(price_posy + 1),
             fill="yellow"
         )
 
@@ -48,30 +38,22 @@ class View(Canvas):
             posx, posy = snake_position[-1]
             self.snake_rect_ids.append(
                 self.create_rectangle(
-                    self.calculate_position(posx),
-                    self.calculate_position(posy),
-                    self.calculate_position(posx + 1),
-                    self.calculate_position(posy + 1),
+                    self.calculate_position(posx), self.calculate_position(posy),
+                    self.calculate_position(posx + 1), self.calculate_position(posy + 1),
                     fill="red"
                 )
             )
         for [posx, posy], rect_id in zip(snake_position, self.snake_rect_ids):
             self.coords(
-                rect_id,
-                self.calculate_position(posx),
-                self.calculate_position(posy),
-                self.calculate_position(posx + 1),
-                self.calculate_position(posy + 1)
+                rect_id, self.calculate_position(posx), self.calculate_position(posy),
+                self.calculate_position(posx + 1), self.calculate_position(posy + 1)
             )
 
     def draw_price(self, price_position):
         posx, posy = price_position
         self.coords(
-            self.price_rect_id,
-            self.calculate_position(posx),
-            self.calculate_position(posy),
-            self.calculate_position(posx + 1),
-            self.calculate_position(posy + 1)
+            self.price_rect_id, self.calculate_position(posx), self.calculate_position(posy),
+            self.calculate_position(posx + 1), self.calculate_position(posy + 1)
         )
 
     def show_game_over_message(self, score):
@@ -84,5 +66,3 @@ class View(Canvas):
     @staticmethod
     def calculate_position(tile_id):
         return tile_id * Utils.TILE_SIZE.value
-
-
