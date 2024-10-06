@@ -3,15 +3,16 @@ from view import View
 from utils import Utils
 from tkinter import *
 from threading import Thread
+from ai.agent import Agent
 
 
 class Controller:
-    def __init__(self, agent):
+    def __init__(self):
         print("Initializing Controller")
         self.model = Model()
         self.show_gui = False
         self.view = None
-        self.agent = agent
+        self.agent = Agent()
         self.agent.train_or_load_model(self)
         self.setup_gui()
 

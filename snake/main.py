@@ -3,7 +3,5 @@ from snake.controller import Controller
 import tensorflow as tf
 
 if __name__ == '__main__':
-    agent = Agent()
-    controller = Controller(agent)
-
+    controller = Controller()
     controller.run_gui()
