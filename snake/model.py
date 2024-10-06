@@ -1,6 +1,7 @@
 from numpy.random import randint
 from utils import Utils
 import copy
+import numpy as np
 
 
 class Model:
@@ -8,6 +9,7 @@ class Model:
         self.snake_position = [[0, 0]]
         self.last_snake_position = self.snake_position[0]
         self.direction = None
+        self.prev_direction = []
         self.lost = False
         self.score = 0
 
@@ -15,6 +17,24 @@ class Model:
             randint(1, Utils.TILE_COUNT.value),
             randint(1, Utils.TILE_COUNT.value)
         ]
+
+        self.reward_decay = 0.995
+        self.min_reward = 0.1
+
+    def reset(self):
+        self.snake_position = [[0, 0]]
+        self.last_snake_position = self.snake_position[0]
+        self.direction = None
+        self.lost = False
+        self.score = 0
+        self.prev_direction = []
+
+        self.price_position = [
+            randint(1, Utils.TILE_COUNT.value),
+            randint(1, Utils.TILE_COUNT.value)
+        ]
+
+        return self.get_state()
 
     def is_price_collision(self):
         return (self.snake_position[0][0] == self.price_position[0] and
@@ -39,30 +59,59 @@ class Model:
         self.snake_position.append(self.last_snake_position)
 
     def get_state(self):
-        state = [[0 for _ in range(Utils.TILE_COUNT.value)] for _ in range(Utils.TILE_COUNT.value)]
-        for pos in self.snake_position:
-            state[pos[0]][pos[1]] = 1
-        state[self.price_position[0]][self.price_position[1]] = 2
+        # Define the grid size
+        grid_size = Utils.TILE_COUNT.value
+
+        # Initialize the state grid with zeros for each channel
+        # We will use 3 channels:
+        # Channel 0: Snake's head
+        # Channel 1: Snake's body (excluding head)
+        # Channel 2: Treasure
+        state = np.zeros((grid_size, grid_size, 3), dtype=np.float32)
+
+        # Channel 0: Mark the snake's head position
+        head_pos = self.snake_position[0]
+        state[head_pos[0], head_pos[1], 0] = 1.0
+
+        # Channel 1: Mark the snake's body positions (excluding head)
+        for pos in self.snake_position[1:]:
+            state[pos[0], pos[1], 1] = 1.0
+
+        # Channel 2: Mark the treasure position
+        state[self.price_position[0], self.price_position[1], 2] = 1.0
+
         return state
 
+    def get_wrapped_distance(self, pos1, pos2):
+        grid_size = Utils.TILE_COUNT.value
+        dx = abs(pos1[0] - pos2[0])
+        dy = abs(pos1[1] - pos2[1])
+        dx = min(dx, grid_size - dx)
+        dy = min(dy, grid_size - dy)
+        return np.sqrt(dx * dx + dy * dy)
+
     def perform_move(self, direction):
-        # update the current direction
+
+        # Check for invalid move (reversing direction)
         if (self.direction == "DOWN" and direction == "UP" or
-                self.direction == "RIGHT" and direction == "LEFT" or
                 self.direction == "UP" and direction == "DOWN" or
-                self.direction == "LEFT" and direction == "RIGHT"):
-            return -1, self.get_state()
+                self.direction == "LEFT" and direction == "RIGHT" or
+                self.direction == "RIGHT" and direction == "LEFT"):
+            return -10, self.get_state(), self.lost
 
         self.last_snake_position = copy.copy(self.snake_position[-1])
 
-        # update the snake position
-        snake_pos_copy = copy.deepcopy(self.snake_position)
-        for i in range(1, len(self.snake_position)):
-            self.snake_position[i] = snake_pos_copy[i - 1]
+        # Previous head position
+        prev_head_pos = copy.deepcopy(self.snake_position[0])
 
-        # update snake position
+        # Update the snake's body
+        for i in range(len(self.snake_position) - 1, 0, -1):
+            self.snake_position[i] = copy.deepcopy(self.snake_position[i - 1])
+
+        # Update snake's head position
         self.direction = direction
         head_pos = self.snake_position[0]
+
         if direction == "DOWN":
             head_pos[1] = (head_pos[1] + 1) % Utils.TILE_COUNT.value
         elif direction == "UP":
@@ -74,15 +123,38 @@ class Model:
         else:
             raise Exception(f"Invalid direction detected {direction}")
 
-        # check collision with price
+        self.prev_direction.append(direction)
+
+        # Calculate Euclidean distances to the treasure
+        prev_distance = self.get_wrapped_distance(prev_head_pos, self.price_position)
+        new_distance = self.get_wrapped_distance(head_pos, self.price_position)
+
+        # Initialize reward
+        reward = 0
+
+        # Check collision with treasure
         if self.is_price_collision():
             self.handle_collision()
             self.score += 1
-            return +1, self.get_state()
+            reward += 20  # Increased reward for finding treasure
+            return reward, self.get_state(), self.lost
 
-        # check collision with snake
+        # Check collision with snake (self-collision)
         if self.is_snake_collision():
             self.game_over()
-            return -20, self.get_state()
+            reward -= 20  # Increased penalty for collision
+            return reward, self.get_state(), self.lost
 
-        return 0, self.get_state()
+        # Reward for moving closer to the treasure
+        if new_distance < prev_distance:
+            reward += 1  # Small positive reward
+        else:
+            reward -= 1  # Small negative reward
+
+        # Small penalty per step to encourage efficiency
+        reward -= 0.1
+
+        # Add logging
+        # print(f"Action: {direction}, Reward: {reward}, Position: {self.snake_position[0]}, Treasure: {self.price_position}")
+        return reward, self.get_state(), self.lost
+

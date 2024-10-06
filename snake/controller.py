@@ -6,14 +6,17 @@ from threading import Thread
 
 
 class Controller:
-    def __init__(self, show_gui=True):
+    def __init__(self, agent):
         print("Initializing Controller")
         self.model = Model()
-        self.show_gui = show_gui
+        self.show_gui = False
         self.view = None
+        self.agent = agent
+        self.agent.train_or_load_model(self)
+        self.setup_gui()
 
-        if self.show_gui:
-            self.setup_gui()
+    def reset(self):
+        return self.model.reset()
 
     def setup_gui(self):
         # set up the view
@@ -28,29 +31,38 @@ class Controller:
         root.geometry(f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}x"
                       f"{Utils.TILE_COUNT.value * Utils.TILE_SIZE.value}")
 
+        # create a button
+        button = Button(root, text="Start", command=self.run_agent)
+        button.grid(column=0, row=1, sticky='N W E S')
+
+    def run_agent(self):
+        print("Running Agent")
+        Thread(target=self.agent.play_steps, args=(self,)).start()
+
     def run_gui(self):
         # run the gui
+        self.show_gui = True
         self.view.mainloop()
 
     def perform_move(self, direction):
         # refactor the direction to "UP", "DOWN", "LEFT", "RIGHT"
-        if type(direction) != str:
-            if direction[0][0] == 1:
+        if type(direction) is not str:
+            if direction == 0:
                 direction = "UP"
-            elif direction[0][1] == 1:
+            elif direction == 1:
                 direction = "DOWN"
-            elif direction[0][2] == 1:
+            elif direction == 2:
                 direction = "LEFT"
-            elif direction[0][3] == 1:
+            elif direction == 3:
                 direction = "RIGHT"
 
-        reward, state = self.model.perform_move(direction)
+        reward, state, done = self.model.perform_move(direction)
         if self.show_gui:
             if not self.model.lost:
                 self.view.draw_snake(self.model.snake_position)
                 self.view.draw_price(self.model.price_position)
             else:
                 self.view.show_game_over_message(self.model.score)
-        return reward, state
+        return reward, state, done
 
 
