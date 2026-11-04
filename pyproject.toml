@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-snake-ai = "snake_ai:main"
+snake-ai = "snake_ai.main:main"
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]

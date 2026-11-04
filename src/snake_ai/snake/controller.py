@@ -1,9 +1,11 @@
-from model import Model
-from view import View
-from utils import Utils
 from tkinter import *
 from threading import Thread
-from ai.agent import Agent
+
+from snake_ai.ai import Agent
+
+from .model import Model
+from .view import View
+from .utils import Utils
 
 
 class Controller:
@@ -77,5 +79,3 @@ class Controller:
             else:
                 self.view.show_game_over_message(self.model.score)
         return reward, state, done
-
-

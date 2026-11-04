@@ -1,9 +1,12 @@
-import tensorflow as tf
-import numpy as np
-from snake.utils import Utils
 import time
-from tqdm import tqdm
 from collections import deque
+
+from tqdm import tqdm
+import numpy as np
+import torch
+import torch.nn as nn
+
+from snake_ai.snake import Utils
 
 
 class Agent:
