@@ -1,11 +1,12 @@
 import time
 from collections import deque
 
+import torch
+from torch.optim import Adam
 from tqdm import tqdm
 import numpy as np
-import torch
-import torch.nn as nn
 
+from .model import Model
 from snake_ai.snake import Utils
 
 
@@ -14,26 +15,17 @@ class Agent:
         print("Initializing Agent")
 
         self.input_space = Utils.TILE_COUNT.value
-        self.model = tf.keras.models.Sequential([
-            tf.keras.layers.Conv2D(64, (3, 3), activation='relu',
-                                   input_shape=(self.input_space, self.input_space, 3)),
-            tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(128, activation='relu'),
-            tf.keras.layers.Dense(4, activation='linear')
-        ])
+        self.policy_model = Model(self.input_space)
+        self.target_model = Model(self.input_space)
+        self.target_model.load_state_dict(self.policy_model.state_dict())
 
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+        self.optimizer = Adam(self.policy_model.parameters(), lr=0.001)
         self.experience_replay = deque(maxlen=10000)
         self.batch_size = 64
         self.epsilon = 1.0
         self.epsilon_decay = 0.99
         self.epsilon_min = 0.1
         self.gamma = 0.95
-
-        # Initialize the target model
-        self.target_model = tf.keras.models.clone_model(self.model)
-        self.target_model.set_weights(self.model.get_weights())
 
         # Variables for updating the target model periodically
         self.update_target_steps = 1000
@@ -42,8 +34,8 @@ class Agent:
     def train_or_load_model(self, controller):
         # Try to load an existing model
         try:
-            self.model = tf.keras.models.load_model("model.keras")
-            self.target_model.set_weights(self.model.get_weights())
+            self.policy_model.load_state_dict(torch.load("model.pt"))
+            self.target_model.load_state_dict(self.policy_model.state_dict())
             print("Model Loaded")
             return
         except Exception:
@@ -57,17 +49,16 @@ class Agent:
         print("\nAgent Trained")
 
         # Save the trained model
-        self.model.save("model.keras")
-
+        torch.save(self.policy_model.state_dict(), "model.pt")
         controller.reset()
 
     def play_one_step(self, state, controller):
-        state = np.expand_dims(state, axis=0)
+        state = torch.from_numpy(state)
         if np.random.rand() < self.epsilon:
-            action = np.random.randint(4)  # Select random action
+            action = torch.randint(high=4, size=(1,))
         else:
-            q_values = self.model(state)
-            action = tf.argmax(q_values, axis=1).numpy()[0]
+            q_values = self.policy_model(state)
+            action = torch.argmax(q_values, dim=1)
 
         reward, new_state, done = controller.perform_move(action)
 
@@ -97,6 +88,8 @@ class Agent:
             print(f"Episode {episode + 1}/{n_episodes}, Total Reward: {total_reward}, Epsilon: {self.epsilon}")
 
     def store_experience(self, state, action, reward, next_state, done):
+        state = torch.from_numpy(state)
+        next_state = torch.from_numpy(next_state)
         self.experience_replay.append((state, action, reward, next_state, done))
 
     def sample_experience(self):
@@ -106,21 +99,21 @@ class Agent:
 
     def update_target_model(self):
         # Copy weights from the main model to the target model
-        self.target_model.set_weights(self.model.get_weights())
+        self.target_model.set_weights(self.policy_model.get_weights())
 
     def train_from_experience(self):
         batch = self.sample_experience()
         states, actions, rewards, next_states, dones = zip(*batch)
 
-        states = tf.convert_to_tensor(np.array(states), dtype=tf.float32)
-        next_states = tf.convert_to_tensor(np.array(next_states), dtype=tf.float32)
-        rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
-        dones = tf.convert_to_tensor(dones, dtype=tf.float32)
-        actions = tf.convert_to_tensor(actions, dtype=tf.int32)
+        states = torch.stack(states)
+        actions = torch.stack(actions)
+        rewards = torch.Tensor(rewards)
+        next_states = torch.stack(next_states)
+        dones = torch.Tensor(dones)
 
         # Implement Double DQN
         # Use the main model to select the next actions
-        next_actions = tf.argmax(self.model(next_states), axis=1)
+        next_actions = torch.argmax(self.policy_model(next_states), dim=1)
         next_actions = tf.cast(next_actions, tf.int32)
 
         # Use the target model to evaluate the Q-values of the next actions
@@ -132,14 +125,14 @@ class Agent:
         target_q_values = rewards + (1 - dones) * self.gamma * max_next_q_values
 
         with tf.GradientTape() as tape:
-            q_values = self.model(states)
+            q_values = self.policy_model(states)
             indices = tf.stack([tf.range(self.batch_size, dtype=tf.int32), actions], axis=1)
             predicted_q_values = tf.gather_nd(q_values, indices)
 
             loss = tf.reduce_mean(tf.square(target_q_values - predicted_q_values))
 
-        grads = tape.gradient(loss, self.model.trainable_variables)
-        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+        grads = tape.gradient(loss, self.policy_model.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, self.policy_model.trainable_variables))
 
         # Update the target model periodically
         if self.steps % self.update_target_steps == 0:
@@ -147,12 +140,12 @@ class Agent:
 
     def get_move(self, state):
         state = np.expand_dims(state, axis=0)
-        q_values = self.model(state)
+        q_values = self.policy_model(state)
         action = tf.argmax(q_values, axis=1).numpy()[0]
         return action
 
     def play_steps(self, controller):
-        state = controller.model.get_state()
+        state = controller.policy_model.get_state()
         for i in range(5):
             action = self.get_move(state)
             reward, state, _ = controller.perform_move(action)
