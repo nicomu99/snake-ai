@@ -1,7 +1,10 @@
-from numpy.random import randint
-from utils import Utils
 import copy
-import numpy as np
+import logging
+import random
+
+from snake_ai.utils import TileMap
+
+logger = logging.getLogger(__name__)
 
 
 class Model:
@@ -14,8 +17,8 @@ class Model:
         self.score = 0
 
         self.price_position = [
-            randint(1, Utils.TILE_COUNT.value),
-            randint(1, Utils.TILE_COUNT.value)
+            random.randint(0, TileMap.TILE_COUNT.value - 1),
+            random.randint(0, TileMap.TILE_COUNT.value - 1)
         ]
 
         self.reward_decay = 0.995
@@ -30,8 +33,8 @@ class Model:
         self.prev_direction = []
 
         self.price_position = [
-            randint(1, Utils.TILE_COUNT.value),
-            randint(1, Utils.TILE_COUNT.value)
+            random.randint(0, TileMap.TILE_COUNT.value - 1),
+            random.randint(0, TileMap.TILE_COUNT.value - 1)
         ]
 
         return self.get_state()
@@ -48,56 +51,38 @@ class Model:
 
     def handle_collision(self):
         # generate new random location of price
-        new_pricex = randint(0, Utils.TILE_COUNT.value)
-        new_pricey = randint(0, Utils.TILE_COUNT.value)
+        new_pricex = random.randint(0, TileMap.TILE_COUNT.value - 1)
+        new_pricey = random.randint(0, TileMap.TILE_COUNT.value - 1)
         while [new_pricex, new_pricey] in self.snake_position:
-            new_pricex = randint(0, Utils.TILE_COUNT.value)
-            new_pricey = randint(0, Utils.TILE_COUNT.value)
+            new_pricex = random.randint(0, TileMap.TILE_COUNT.value - 1)
+            new_pricey = random.randint(0, TileMap.TILE_COUNT.value - 1)
         self.price_position = [new_pricex, new_pricey]
 
         # add new square to snake
         self.snake_position.append(self.last_snake_position)
 
-    def get_state(self):
-        # Define the grid size
-        grid_size = Utils.TILE_COUNT.value
-
-        # Initialize the state grid with zeros for each channel
-        # We will use 3 channels:
-        # Channel 0: Snake's head
-        # Channel 1: Snake's body (excluding head)
-        # Channel 2: Treasure
-        state = np.zeros((grid_size, grid_size, 3), dtype=np.float32)
-
-        # Channel 0: Mark the snake's head position
-        head_pos = self.snake_position[0]
-        state[head_pos[0], head_pos[1], 0] = 1.0
-
-        # Channel 1: Mark the snake's body positions (excluding head)
-        for pos in self.snake_position[1:]:
-            state[pos[0], pos[1], 1] = 1.0
-
-        # Channel 2: Mark the treasure position
-        state[self.price_position[0], self.price_position[1], 2] = 1.0
-
-        return state
+    def get_state(self) -> tuple[list[list[int]], list[int]]:
+        return self.snake_position, self.price_position
 
     @staticmethod
     def get_wrapped_distance(pos1, pos2):
-        grid_size = Utils.TILE_COUNT.value
+        grid_size = TileMap.TILE_COUNT.value
         dx = abs(pos1[0] - pos2[0])
         dy = abs(pos1[1] - pos2[1])
         dx = min(dx, grid_size - dx)
         dy = min(dy, grid_size - dy)
-        return np.sqrt(dx * dx + dy * dy)
+        return (dx * dx + dy * dy) ** 0.5
 
     def perform_move(self, direction):
-
         # Check for invalid move (reversing direction)
-        if (self.direction == "DOWN" and direction == "UP" or
-                self.direction == "UP" and direction == "DOWN" or
-                self.direction == "LEFT" and direction == "RIGHT" or
-                self.direction == "RIGHT" and direction == "LEFT"):
+        if (
+            self.direction == "DOWN" and direction == "UP" or
+            self.direction == "UP" and direction == "DOWN" or
+            self.direction == "LEFT" and direction == "RIGHT" or
+            self.direction == "RIGHT" and direction == "LEFT"
+        ):
+            logger.debug("Move into direction %s invalid", direction)
+            self.game_over()
             return -10, self.get_state(), self.lost
 
         self.last_snake_position = copy.copy(self.snake_position[-1])
@@ -114,13 +99,13 @@ class Model:
         head_pos = self.snake_position[0]
 
         if direction == "DOWN":
-            head_pos[1] = (head_pos[1] + 1) % Utils.TILE_COUNT.value
+            head_pos[1] = (head_pos[1] + 1) % TileMap.TILE_COUNT.value
         elif direction == "UP":
-            head_pos[1] = (head_pos[1] - 1) % Utils.TILE_COUNT.value
+            head_pos[1] = (head_pos[1] - 1) % TileMap.TILE_COUNT.value
         elif direction == "LEFT":
-            head_pos[0] = (head_pos[0] - 1) % Utils.TILE_COUNT.value
+            head_pos[0] = (head_pos[0] - 1) % TileMap.TILE_COUNT.value
         elif direction == "RIGHT":
-            head_pos[0] = (head_pos[0] + 1) % Utils.TILE_COUNT.value
+            head_pos[0] = (head_pos[0] + 1) % TileMap.TILE_COUNT.value
         else:
             raise Exception(f"Invalid direction detected {direction}")
 

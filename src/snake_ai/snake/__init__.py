@@ -1,7 +1,7 @@
-from .controller import Controller
-from .utils import Utils
+from .model import Model
+from .session import GameSession
 
 __all__ = [
-    "Controller",
-    "Utils",
+    "GameSession",
+    "Model",
 ]
