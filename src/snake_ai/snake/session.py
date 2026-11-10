@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import time
+import uuid
 
 from snake_ai.ai import Agent
 
@@ -15,14 +17,18 @@ class GameSession:
     """Headless game core that knows nothing about how the game is
     displayed."""
 
+    _DELETION_DELAY = 10    # seconds
+
     def __init__(self, model, agent):
+        self.id = uuid.uuid4().hex[:12]
         self.model = model
         self.agent = agent
         self._listeners = []
         self.sink = None
         self.running = asyncio.Event()
         self.task = asyncio.create_task(self._loop())
-        self.tick_ms = 16
+        self.tick_ms: int = 16
+        self.detached_since: float | None = None
 
     async def _loop(self):
         logger.info("Starting game session loop")
@@ -57,7 +63,33 @@ class GameSession:
     def pause(self):
         self.running.clear()
 
-    def reset(self, _seed: int | None):
+    def is_expired(self, now: float) -> bool:
+        if self.detached_since is None:
+            logger.debug("Game session not detached")
+            return False
+        expired_time = now - self.detached_since
+        logger.debug("Game session detached for %.2f seconds", expired_time)
+        return expired_time > self._DELETION_DELAY
+
+    def attach(self):
+        self.detached_since = None
+
+    def detach(self):
+        self.detached_since = time.monotonic()
+        logger.info("Detaching game session %s at %s", self.id, self.detached_since)
+        self.pause()
+
+    def cancel(self):
+        self.task.cancel()
+
+    async def aclose(self):
+        self.task.cancel()
+        try:
+            await self.task
+        except asyncio.CancelledError:
+            logger.info("Game session %s stopped", self.id)
+
+    def reset(self, _seed: int | None = None):
         # TODO
         state = self.model.reset()
         self.task = asyncio.create_task(self._loop())

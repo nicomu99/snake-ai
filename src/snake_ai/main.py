@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from snake_ai.ai import Agent
+from snake_ai.api.game_session_sweeper import GameSessionSweeper
 from snake_ai.api.sockets import router
 from snake_ai.registries import GameSessionRegistry
 from snake_ai.utils import configure_logging
@@ -17,7 +18,13 @@ async def lifespan(app: FastAPI):
     app.state.agent = agent
     # app.state.redis = redis.Redis.from_url(redis_url, decode_responses=True)
     app.state.game_sessions = GameSessionRegistry(app.state.agent)  # , app.state.redis)
-    yield
+    game_session_sweeper = GameSessionSweeper(app.state.game_sessions)
+    game_session_sweeper.start()
+    try:
+        yield
+    finally:
+        await game_session_sweeper.stop()
+        await app.state.game_sessions.close_all()
 
 
 def main():

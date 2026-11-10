@@ -1,6 +1,5 @@
 # import json
 import logging
-import uuid
 
 # import redis.asyncio as redis
 from snake_ai.ai import Agent
@@ -23,6 +22,7 @@ class GameSessionRegistry:
             await self.add(session)
         else:
             session = await self.get(game_session_id)
+        session.attach()
         old_sink = session.sink
         session.sink = sink
         if old_sink is not None:
@@ -36,13 +36,32 @@ class GameSessionRegistry:
         return session
 
     async def detach(self, sink: WebSocketSink, game_session: GameSession):
+        if sink is not game_session.sink:
+            return
         game_session.sink = None
-        game_session.pause()
+        # game_session.pause()
+        game_session.detach()
         try:
             await sink.close()
         except RuntimeError:
             # TODO
             pass
+
+    def remove_expired(self, now: float):
+        logger.debug("Removing expired game sessions")
+        for session_id in list(self._sessions.keys()):
+            game_session = self._sessions[session_id]
+            if not game_session.is_expired(now):
+                continue
+            logger.info("Deleting game session %s", session_id)
+            game_session.cancel()
+            del self._sessions[session_id]
+
+    async def close_all(self):
+        for session_id in list(self._sessions.keys()):
+            session = self._sessions[session_id]
+            await session.aclose()
+            del self._sessions[session_id]
 
     def check_key(self, game_session_id: str) -> bool:
         return game_session_id in self._sessions
@@ -56,7 +75,7 @@ class GameSessionRegistry:
         Returns:
             The new id, 12 hex characters.
         """
-        game_session_id = uuid.uuid4().hex[:12]
+        game_session_id = game_session.id
         key = self._key(game_session_id)
         # await self._r.set(
         #     key, json.dumps(game_session.to_dict())
