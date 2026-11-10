@@ -23,41 +23,45 @@ class GameSession:
         self.tick_ms = 16
 
     async def _loop(self):
+        logger.info("Starting game session loop")
         while not self.model.lost:
             await self.running.wait()
-            self.agent_step()
+            await self.agent_step()
             await asyncio.sleep(self.tick_ms / 1000)
+        self.pause()
 
     async def handle(self, command: str):
-        _COMMAND_MAP = {"pause": self.pause, "resume": self.resume, "start": self.start}
+        _COMMAND_MAP = {
+            "pause": self.pause,
+            "resume": self.start_or_resume,
+            "start": self.start_or_resume,
+            "reset": self.reset,
+        }
         func = _COMMAND_MAP[command]
         func()
 
-    def start(self):
-        self.running.set()
-
-    def resume(self):
+    def start_or_resume(self):
         self.running.set()
 
     def pause(self):
         self.running.clear()
 
+    def reset(self):
+        state = self.model.reset()
+        self.task = asyncio.create_task(self._loop())
+        return state
+
     def subscribe(self, listener):
         """Register ``listener(snapshot)``, called after every state change."""
         self._listeners.append(listener)
 
-    def reset(self):
-        state = self.model.reset()
-        self._notify()
-        return state
-
-    def step(self, action):
+    async def step(self, action):
         """Perform a move. ``action`` is a direction string or an action int."""
         direction = ACTIONS[action] if isinstance(action, int) else action
-        logger.info("Performing move into direction %s", direction)
+        logger.debug("Performing move into direction %s", direction)
 
         reward, state, done = self.model.perform_move(direction)
-        self._notify()
+        await self._notify()
         return reward, state, done
 
     def agent_step(self):
@@ -75,13 +79,13 @@ class GameSession:
         }
 
     async def _notify(self):
-        if not self._listeners:
-            return
         snapshot = self.snapshot()
-        for listener in self._listeners:
-            listener(snapshot)
         if self.sink is not None:
             await self.sink.send_frame(snapshot)
+        if not self._listeners:
+            return
+        for listener in self._listeners:
+            listener(snapshot)
 
     def init_message(self):
         pass

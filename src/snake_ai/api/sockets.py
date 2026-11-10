@@ -1,12 +1,11 @@
 from typing import Annotated
 
-import json
-
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from snake_ai.registries import GameSessionRegistry
-from .web_socket_sink import WebSocketSink
+
 from .deps import get_session_registry
+from .web_socket_sink import WebSocketSink
 
 router = APIRouter()
 
@@ -17,7 +16,14 @@ def get_command(message: dict):
         # TODO: raise
         pass
     command = message["type"]
-    if command not in ["start", "pause", "resume"]:
+    if command not in [
+        "start",
+        "pause",
+        "resume",
+        "reset",
+        "speed",
+        "set_model",
+    ]:
         # TODO: raise
         pass
     return command
@@ -37,4 +43,4 @@ async def play(
             command = get_command(await ws.receive_json())
             await session.handle(command)
     except WebSocketDisconnect:
-        registry.detach(sink, session)
+        await registry.detach(sink, session)

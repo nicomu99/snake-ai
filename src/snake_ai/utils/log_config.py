@@ -22,7 +22,7 @@ LOGGING = {
             "formatter": "standard",
         },
     },
-    "root": {"level": "INFO", "handlers": ["console", "file"]},
+    "root": {"level": "DEBUG", "handlers": ["console", "file"]},
     "loggers": {
         "urllib3": {"level": "WARNING"},  # quiet noisy dependencies
     },

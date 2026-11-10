@@ -1,11 +1,14 @@
 import json
+import logging
 import uuid
 
 import redis.asyncio as redis
 
-from snake_ai.api.web_socket_sink import WebSocketSink
 from snake_ai.ai import Agent
+from snake_ai.api.web_socket_sink import WebSocketSink
 from snake_ai.snake import GameSession, Model
+
+logger = logging.getLogger(__name__)
 
 
 class GameSessionRegistry:
@@ -15,6 +18,7 @@ class GameSessionRegistry:
         self._sessions: dict[str, GameSession] = {}
 
     async def attach(self, sink: WebSocketSink, game_session_id: str | None):
+        logger.info("Attaching new sink")
         if game_session_id is None or not self.check_key(game_session_id):
             session = GameSession(Model(), self._agent)
             await self.add(session)
@@ -26,14 +30,20 @@ class GameSessionRegistry:
             try:
                 await old_sink.close()
             except RuntimeError:
+                # TODO
                 pass
 
         await sink.send_frame(session.init_message())
         return session
 
-    async def detach(self):
-        # TODO
-        pass
+    async def detach(self, sink: WebSocketSink, game_session: GameSession):
+        game_session.sink = None
+        game_session.pause()
+        try:
+            await sink.close()
+        except RuntimeError:
+            # TODO
+            pass
 
     def check_key(self, game_session_id: str) -> bool:
         return game_session_id in self._r
