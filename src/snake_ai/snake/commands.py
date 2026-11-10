@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 
 class Start(BaseModel):
@@ -17,26 +17,14 @@ class Resume(BaseModel):
 
 class Reset(BaseModel):
     type: Literal["reset"]
-    seed: int
+    seed: int | None = None
 
 
 class Speed(BaseModel):
     type: Literal["speed"]
-    tick_ms: int
+    tick_ms: int = Field(ge=1, le=1000)
 
 
 class SetModel(BaseModel):
     type: Literal["set_model"]
     model_id: str
-
-
-class Command(BaseModel):
-    command: Start | Pause | Resume | Reset | Speed | SetModel = (
-        Field(discriminator="type")
-    )
-
-def parse_message(message: dict):
-    try:
-        Command(command=message)
-    except ValidationError as e:
-        print(e)

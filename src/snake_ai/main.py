@@ -1,12 +1,12 @@
 from contextlib import asynccontextmanager
 
-import redis.asyncio as redis
+# import redis.asyncio as redis
 from fastapi import FastAPI
 
-from snake_ai.api.sockets import router
 from snake_ai.ai import Agent
-from snake_ai.utils import configure_logging
+from snake_ai.api.sockets import router
 from snake_ai.registries import GameSessionRegistry
+from snake_ai.utils import configure_logging
 
 
 @asynccontextmanager
@@ -15,8 +15,8 @@ async def lifespan(app: FastAPI):
     agent = Agent()
     agent.load_model()
     app.state.agent = agent
-    app.state.redis = redis.Redis.from_url(redis_url, decode_responses=True)
-    app.state.game_sessions = GameSessionRegistry(app.state.redis, app.state.agent)
+    # app.state.redis = redis.Redis.from_url(redis_url, decode_responses=True)
+    app.state.game_sessions = GameSessionRegistry(app.state.agent)  # , app.state.redis)
     yield
 
 

@@ -1,32 +1,16 @@
+from json import JSONDecodeError
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from snake_ai.registries import GameSessionRegistry
 
+from .command_message import parse_message
 from .deps import get_session_registry
+from .errors import InvalidCommandError
 from .web_socket_sink import WebSocketSink
 
 router = APIRouter()
-
-
-def get_command(message: dict):
-    print(message)
-    if "type" not in message:
-        # TODO: raise
-        pass
-    command = message["type"]
-    if command not in [
-        "start",
-        "pause",
-        "resume",
-        "reset",
-        "speed",
-        "set_model",
-    ]:
-        # TODO: raise
-        pass
-    return command
 
 
 @router.websocket("/ws/play")
@@ -40,7 +24,15 @@ async def play(
     session = await registry.attach(sink, game_id)   # resume, or create a new game
     try:
         while True:
-            command = get_command(await ws.receive_json())
-            await session.handle(command)
+            try:
+                command_message = parse_message(await ws.receive_json())
+                await session.handle(command_message.command)
+            except InvalidCommandError as e:
+                await ws.send_json({"type": "error", "message": str(e)})
+            except JSONDecodeError as _:
+                await ws.send_json({
+                    "type": "error",
+                    "message": "Message could not be decoded. Please send valid JSON."
+                })
     except WebSocketDisconnect:
         await registry.detach(sink, session)

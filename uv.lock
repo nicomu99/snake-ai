@@ -1658,6 +1658,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "numpy" },
+    { name = "pydantic" },
     { name = "redis" },
     { name = "torch" },
     { name = "tqdm" },
@@ -1673,6 +1674,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.162.2" },
     { name = "numpy", specifier = ">=2.5.4" },
+    { name = "pydantic", specifier = ">=2.14.3" },
     { name = "redis", specifier = ">=8.1.0" },
     { name = "torch", specifier = ">=2.15.0" },
     { name = "tqdm", specifier = ">=4.70.1" },

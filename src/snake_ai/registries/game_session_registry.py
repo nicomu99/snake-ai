@@ -1,9 +1,8 @@
-import json
+# import json
 import logging
 import uuid
 
-import redis.asyncio as redis
-
+# import redis.asyncio as redis
 from snake_ai.ai import Agent
 from snake_ai.api.web_socket_sink import WebSocketSink
 from snake_ai.snake import GameSession, Model
@@ -12,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 class GameSessionRegistry:
-    def __init__(self, r: redis.Redis, agent: Agent):
-        self._r = r
+    def __init__(self, agent: Agent, ):  # r: redis.Redis):
+        # self._r = r
         self._agent = agent
         self._sessions: dict[str, GameSession] = {}
 
@@ -46,7 +45,7 @@ class GameSessionRegistry:
             pass
 
     def check_key(self, game_session_id: str) -> bool:
-        return game_session_id in self._r
+        return game_session_id in self._sessions
 
     async def add(self, game_session: GameSession) -> str:
         """Stores a game session under a new random id.
@@ -59,9 +58,9 @@ class GameSessionRegistry:
         """
         game_session_id = uuid.uuid4().hex[:12]
         key = self._key(game_session_id)
-        await self._r.set(
-            key, json.dumps(game_session.to_dict())
-        )
+        # await self._r.set(
+        #     key, json.dumps(game_session.to_dict())
+        # )
         self._sessions[key] = game_session
         return game_session_id
 
@@ -84,9 +83,9 @@ class GameSessionRegistry:
             game_session_id: Unique identifier of the game session to store.
             game_session: GameSession data.
         """
-        await self._r.set(
-            self._key(game_session_id), json.dumps(game_session.to_dict())
-        )
+        # await self._r.set(
+        #     self._key(game_session_id), json.dumps(game_session.to_dict())
+        # )
 
     async def delete(self, game_session_id: str) -> bool:
         """Removes a game session.
@@ -97,8 +96,8 @@ class GameSessionRegistry:
         Returns:
             True if it existed and was removed, False if the id was unknown.
         """
-        deleted_keys = await self._r.delete(self._key(game_session_id))
-        return bool(deleted_keys)
+        # deleted_keys = await self._r.delete(self._key(game_session_id))
+        # return bool(deleted_keys)
 
     @staticmethod
     def _key(gs_id: str):

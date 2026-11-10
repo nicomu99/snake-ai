@@ -3,6 +3,8 @@ import logging
 
 from snake_ai.ai import Agent
 
+from .commands import Pause, Reset, Resume, SetModel, Speed, Start
+
 logger = logging.getLogger(__name__)
 
 # Index = action int produced by the agent
@@ -30,15 +32,24 @@ class GameSession:
             await asyncio.sleep(self.tick_ms / 1000)
         self.pause()
 
-    async def handle(self, command: str):
-        _COMMAND_MAP = {
-            "pause": self.pause,
-            "resume": self.start_or_resume,
-            "start": self.start_or_resume,
-            "reset": self.reset,
-        }
-        func = _COMMAND_MAP[command]
-        func()
+    async def handle(
+        self,
+        command: Pause | Reset | Resume | SetModel | Speed | Start,
+    ):
+        logger.info("Handling command %s", command)
+        match command:
+            case Pause():
+                self.pause()
+            case Reset():
+                self.reset(command.seed)
+            case Resume():
+                self.start_or_resume()
+            case SetModel():
+                self.set_model(command.model_id)
+            case Speed():
+                self.set_speed(command.tick_ms)
+            case Start():
+                self.start_or_resume()
 
     def start_or_resume(self):
         self.running.set()
@@ -46,10 +57,18 @@ class GameSession:
     def pause(self):
         self.running.clear()
 
-    def reset(self):
+    def reset(self, _seed: int | None):
+        # TODO
         state = self.model.reset()
         self.task = asyncio.create_task(self._loop())
         return state
+
+    def set_model(self, model_id: str):
+        # TODO
+        pass
+
+    def set_speed(self, tick_ms: int):
+        self.tick_ms = tick_ms
 
     def subscribe(self, listener):
         """Register ``listener(snapshot)``, called after every state change."""
