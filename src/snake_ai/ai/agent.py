@@ -68,6 +68,17 @@ class Agent:
         torch.save(self.policy_model.state_dict(), "policy_models/model.pt")
         env.reset()
 
+    def load_model(self):
+        # Try to load an existing model
+        try:
+            self.policy_model.load_state_dict(
+                torch.load("policy_models/model.pt"))
+            self.update_target_model()
+            print("Model Loaded")
+            return
+        except Exception:
+            print("No Model Found")
+
     def update_target_model(self):
         # Copy weights from the main model to the target model
         self.target_model.load_state_dict(self.policy_model.state_dict())
@@ -169,9 +180,6 @@ class Agent:
         loss.backward()
 
         self.optimizer.step()
-
-        # Update the target model periodically
-
 
     def get_move(self, state):
         state = state.to(self.device)
