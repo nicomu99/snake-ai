@@ -29,13 +29,23 @@ class GameRunner:
 
     async def _loop(self):
         logger.info("Starting game session loop")
-        while not self.game.snake_env.lost:
+        while True:
             await self.running.wait()
             self.game.agent_step()
             snapshot = self.game.snapshot()
-            await self.sink.send_frame(snapshot)
+            await self.send_frame(snapshot)
+            if self.game.snake_env.lost or self.game.snake_env.won:
+                await self.send_frame(self.end_message())
+                self.pause()
             await asyncio.sleep(self.tick_ms / 1000)
-        self.pause()
+    
+    async def send_frame(self, message: dict):
+        try:
+            if self.sink is None:
+                return
+            await self.sink.send_frame(message)
+        except Exception:
+            logger.exception("Sending frame failed")
 
     async def handle(
         self,
@@ -46,7 +56,7 @@ class GameRunner:
             case Pause():
                 self.pause()
             case Reset():
-                self.reset(command.seed)
+                await self.reset(command.seed)
             case Resume():
                 self.start_or_resume()
             case SetModel():
@@ -62,12 +72,11 @@ class GameRunner:
     def pause(self):
         self.running.clear()
 
-    def reset(self, _seed: int | None = None):
-        # TODO
-        state = self.game.reset()
-        self.task.cancel()
-        self.task = asyncio.create_task(self._loop())
-        return state
+    async def reset(self, _seed: int | None = None):
+        # TODO: what to do with seed
+        self.pause()
+        self.game.reset()
+        await self.sink.send_frame(self.init_message())
 
     def set_model(self, model_id: str):
         # TODO
@@ -116,4 +125,15 @@ class GameRunner:
             logger.info("Game session %s stopped", self.id)
 
     def init_message(self) -> dict:
-        return {"hello": "world"}
+        return {"game_id": self.id}
+
+    def end_message(self):
+        snapshot = self.game.snapshot()
+        reason = "collision" if snapshot["lost"] else "won_game"
+        return {
+            "reason": reason,
+            "score": snapshot["score"],
+            "step_count": snapshot["step_count"],
+            "snake_length": len(snapshot["snake"]),
+            "won": snapshot["won"],
+        }

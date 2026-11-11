@@ -14,6 +14,7 @@ class SnakeEnv:
         self.direction = None
         self.prev_direction = []
         self.lost = False
+        self.won = False
         self.score = 0
 
         self.price_position = [
@@ -29,6 +30,7 @@ class SnakeEnv:
         self.last_snake_position = self.snake_position[0]
         self.direction = None
         self.lost = False
+        self.won = False
         self.score = 0
         self.prev_direction = []
 
@@ -49,7 +51,17 @@ class SnakeEnv:
     def game_over(self):
         self.lost = True
 
-    def handle_collision(self):
+    def game_won(self) -> bool:
+        tile_count = TileMap.TILE_COUNT.value * TileMap.TILE_COUNT.value
+        return len(self.snake_position) == tile_count
+
+    def handle_collision(self) -> bool:
+        # add new square to snake
+        self.snake_position.append(self.last_snake_position)
+        if self.game_won():
+            self.won = True
+            return True
+
         # generate new random location of price
         new_pricex = random.randint(0, TileMap.TILE_COUNT.value - 1)
         new_pricey = random.randint(0, TileMap.TILE_COUNT.value - 1)
@@ -57,9 +69,7 @@ class SnakeEnv:
             new_pricex = random.randint(0, TileMap.TILE_COUNT.value - 1)
             new_pricey = random.randint(0, TileMap.TILE_COUNT.value - 1)
         self.price_position = [new_pricex, new_pricey]
-
-        # add new square to snake
-        self.snake_position.append(self.last_snake_position)
+        return False
 
     def get_state(self) -> tuple[list[list[int]], list[int]]:
         return self.snake_position, self.price_position
@@ -83,7 +93,7 @@ class SnakeEnv:
         ):
             logger.debug("Move into direction %s invalid", direction)
             self.game_over()
-            return -10, self.get_state(), self.lost
+            return -10, self.get_state(), self.lost, self.won
 
         self.last_snake_position = copy.copy(self.snake_position[-1])
 
@@ -120,16 +130,18 @@ class SnakeEnv:
 
         # Check collision with treasure
         if self.is_price_collision():
-            self.handle_collision()
+            if self.handle_collision():
+                reward = 100
+                return reward, self.get_state, self.lost, self.won
             self.score += 1
             reward += 20  # Increased reward for finding treasure
-            return reward, self.get_state(), self.lost
+            return reward, self.get_state(), self.lost, self.won
 
         # Check collision with snake (self-collision)
         if self.is_snake_collision():
             self.game_over()
             reward -= 20  # Increased penalty for collision
-            return reward, self.get_state(), self.lost
+            return reward, self.get_state(), self.lost, self.won
 
         # Reward for moving closer to the treasure
         if new_distance < prev_distance:
@@ -144,4 +156,4 @@ class SnakeEnv:
         # print(f"Action: {direction}, Reward: {reward}, \
         # Position: {self.snake_position[0]}, Treasure: {self.price_position}")
 
-        return reward, self.get_state(), self.lost
+        return reward, self.get_state(), self.lost, self.won

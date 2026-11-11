@@ -18,12 +18,14 @@ class Game:
         self.snake_env = SnakeEnv()
         self.agent = agent
         self._listeners = []
+        self.step_count = 0
 
     def subscribe(self, listener):
         """Register ``listener(snapshot)``, called after every state change."""
         self._listeners.append(listener)
 
     def reset(self):
+        self.step_count = 0
         state = self.snake_env.reset()
         return state
 
@@ -32,9 +34,10 @@ class Game:
         direction = ACTIONS[action] if isinstance(action, int) else action
         logger.debug("Performing move into direction %s", direction)
 
-        reward, state, done = self.snake_env.perform_move(direction)
+        reward, state, lost, won = self.snake_env.perform_move(direction)
+        self.step_count += 1
         self._notify()
-        return reward, state, done
+        return reward, state, lost, won
 
     def agent_step(self):
         """Let the agent choose and perform one greedy move."""
@@ -48,6 +51,8 @@ class Game:
             "food": list(self.snake_env.price_position),
             "score": self.snake_env.score,
             "lost": self.snake_env.lost,
+            "won": self.snake_env.won,
+            "step_count": self.step_count,
         }
 
     def _notify(self):

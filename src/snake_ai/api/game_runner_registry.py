@@ -1,4 +1,5 @@
 # import json
+import asyncio
 import logging
 
 # import redis.asyncio as redis
@@ -39,10 +40,16 @@ class GameRunnerRegistry:
             del self._runners[runner_id]
 
     async def close_all(self):
-        for runner_id in list(self._runners.keys()):
-            game_runner = self._runners[runner_id]
-            await game_runner.aclose()
-            del self._runners[runner_id]
+        runners = list(self._runners.items())
+        results = await asyncio.gather(
+            *(runner.aclose() for _, runner in runners),
+            return_exceptions=True
+        )
+        for runner_id, _, result in zip(runners, results, strict=True):
+            if result is None:
+                continue
+            logger.error("Runner %s failed", runner_id, exc_info=result)
+        self._runners.clear()
 
     def check_key(self, game_runner_id: str) -> bool:
         return self._key(game_runner_id) in self._runners
