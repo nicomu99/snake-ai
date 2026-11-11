@@ -3,11 +3,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from snake_ai.registries import GameSessionRegistry
-
 from .command_message import parse_message
-from .deps import get_session_registry
+from .deps import get_registry
 from .errors import InvalidCommandError
+from .game_runner_registry import GameRunnerRegistry
 from .web_socket_sink import WebSocketSink
 
 router = APIRouter()
@@ -16,7 +15,7 @@ router = APIRouter()
 @router.websocket("/ws/play")
 async def play(
     ws: WebSocket,
-    registry: Annotated[GameSessionRegistry, Depends(get_session_registry)],
+    registry: Annotated[GameRunnerRegistry, Depends(get_registry)],
     game_id: str | None = None,
 ):
     await ws.accept()

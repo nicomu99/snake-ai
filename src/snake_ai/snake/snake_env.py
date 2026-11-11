@@ -7,7 +7,7 @@ from snake_ai.utils import TileMap
 logger = logging.getLogger(__name__)
 
 
-class Model:
+class SnakeEnv:
     def __init__(self):
         self.snake_position = [[0, 0]]
         self.last_snake_position = self.snake_position[0]

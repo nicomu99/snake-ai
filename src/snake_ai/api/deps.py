@@ -1,7 +1,7 @@
 from fastapi.requests import HTTPConnection
 
-from snake_ai.registries import GameSessionRegistry
+from .game_runner_registry import GameRunnerRegistry
 
 
-def get_session_registry(request: HTTPConnection) -> GameSessionRegistry:
-    return request.app.state.game_sessions
+def get_registry(request: HTTPConnection) -> GameRunnerRegistry:
+    return request.app.state.runner_registry

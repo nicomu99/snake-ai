@@ -1,14 +1,7 @@
-from .commands import Pause, Reset, Resume, SetModel, Speed, Start
-from .model import Model
-from .session import GameSession
+from .game import Game
+from .snake_env import SnakeEnv
 
 __all__ = [
-    "Start",
-    "Pause",
-    "Reset",
-    "Resume",
-    "SetModel",
-    "Speed",
-    "GameSession",
-    "Model",
+    "Game",
+    "SnakeEnv",
 ]

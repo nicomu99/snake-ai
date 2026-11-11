@@ -2,20 +2,20 @@ import asyncio
 import logging
 import time
 
-from snake_ai.registries import GameSessionRegistry
+from snake_ai.api.game_runner_registry import GameRunnerRegistry
 
 logger = logging.getLogger(__name__)
 
 
-class GameSessionSweeper:
-    def __init__(self, registry: GameSessionRegistry, delay: float = 5):
+class GameRunnerSweeper:
+    def __init__(self, registry: GameRunnerRegistry, delay: float = 5):
         logger.debug("Creating GameSessionSweeper")
         self.task = None
         self.delay = delay
         self.registry = registry
 
     async def _loop(self):
-        logger.info("Starting GameSessionSweeper with delay %.2f", self.delay)
+        logger.info("Starting GameRunnerSweeper with delay %.2f", self.delay)
         while True:
             await asyncio.sleep(self.delay)
             try:
