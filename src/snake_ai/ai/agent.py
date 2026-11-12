@@ -1,3 +1,5 @@
+"""The Double DQN agent that learns and plays Snake."""
+
 import logging
 import random
 from collections import deque
@@ -16,7 +18,44 @@ logger = logging.getLogger(__name__)
 
 
 class Agent:
+    """A Double DQN agent with experience replay and epsilon-greedy exploration.
+
+    The agent holds two ``PolicyModel`` networks. The policy network is
+    trained and picks actions. The target network is a copy that is synced
+    every ``update_target_steps`` steps and is used to compute stable
+    training targets. Following Double DQN, the policy network chooses the
+    next action and the target network scores it.
+
+    For serving, call ``load_model`` once and then ``act`` for each move.
+
+    Attributes:
+        policy_model: The network that is trained and used to pick actions.
+        target_model: A periodically synced copy used for training targets.
+        optimizer: Adam optimizer for the policy network.
+        criterion: MSE loss between predicted and target Q-values.
+        experience_replay: A bounded buffer of
+            ``(state, action, reward, next_state, done)`` transitions.
+        batch_size: The number of transitions per training update.
+        epsilon: The current probability of taking a random action.
+        epsilon_decay: The factor ``epsilon`` is multiplied by each step.
+        epsilon_min: The lower bound for ``epsilon``.
+        gamma: The discount factor for future rewards.
+        train_steps: The total number of environment steps in ``train``.
+        learning_starts: Steps to collect before the gated training updates
+            begin.
+        update_target_steps: How often (in steps) the target network is synced.
+        train_policy_steps: How often (in steps) the gated training update
+            runs once ``learning_starts`` is reached.
+        steps: The number of environment steps taken so far.
+        device: ``"cuda"`` if available, otherwise ``"cpu"``.
+    """
+
     def __init__(self):
+        """Builds both networks and sets the training hyperparameters.
+
+        The networks start with random weights. Call ``load_model`` or
+        ``train_or_load_model`` to get a trained agent.
+        """
         print("Initializing Agent")
 
         self.input_space = TileMap.TILE_COUNT.value
@@ -48,6 +87,15 @@ class Agent:
         self.target_model.to(self.device)
 
     def train_or_load_model(self, env):
+        """Loads the saved model, or trains a new one if none can be loaded.
+
+        A newly trained model is saved to ``policy_models/model.pt`` and the
+        environment is reset afterwards.
+
+        Args:
+            env: The environment to train on. It must provide ``reset()``
+                and ``step(action)``.
+        """
         # Try to load an existing model
         try:
             self.policy_model.load_state_dict(
@@ -69,6 +117,12 @@ class Agent:
         env.reset()
 
     def load_model(self):
+        """Loads the policy weights from ``policy_models/model.pt``.
+
+        The path is relative to the current working directory. The target
+        network is synced afterwards. If loading fails for any reason, the
+        error is swallowed and the agent keeps its random weights.
+        """
         # Try to load an existing model
         try:
             self.policy_model.load_state_dict(
@@ -80,10 +134,20 @@ class Agent:
             print("No Model Found")
 
     def update_target_model(self):
-        # Copy weights from the main model to the target model
+        """Copies the policy network's weights into the target network."""
         self.target_model.load_state_dict(self.policy_model.state_dict())
 
     def play_one_step(self, state, env):
+        """Picks an epsilon-greedy action and applies it to the environment.
+
+        Args:
+            state: The current encoded state.
+            env: The environment to step.
+
+        Returns:
+            A ``(reward, new_state, action, done)`` tuple, where ``new_state``
+            is already encoded.
+        """
         if random.uniform(0, 1) < self.epsilon:
             action = random.randint(0, 3)
         else:
@@ -95,6 +159,16 @@ class Agent:
         return reward, new_state, action, done
 
     def train(self, env):
+        """Runs the training loop for ``train_steps`` environment steps.
+
+        Each step plays one epsilon-greedy move, stores the transition, and
+        may run training updates and a target network sync. The episode
+        score average is logged every ``10 * update_target_steps`` steps.
+
+        Args:
+            env: The environment to train on. It must provide ``reset()``
+                and ``step(action)``.
+        """
         state = self.encode_state(env.reset())
         avg_score = []
         episode_score = 0
@@ -139,6 +213,17 @@ class Agent:
         # )
 
     def store_experience(self, state, action, reward, next_state, done):
+        """Adds one transition to the replay buffer.
+
+        The oldest transition is dropped once the buffer is full.
+
+        Args:
+            state: The encoded state before the action, shape ``(N, N, 3)``.
+            action: The action index that was taken.
+            reward: The reward received for the action.
+            next_state: The encoded state after the action.
+            done: Whether the episode ended with this action.
+        """
         # state is a (n, n, 3) tensor; same as next_state
         # action is a single int
         # reward is a single int
@@ -146,11 +231,22 @@ class Agent:
         self.experience_replay.append((state, action, reward, next_state, done))
 
     def sample_experience(self):
+        """Draws a random batch of transitions without replacement.
+
+        Returns:
+            A list of up to ``batch_size`` transition tuples.
+        """
         indices = torch.randperm(len(self.experience_replay))[:self.batch_size]
         batch = [self.experience_replay[i] for i in indices]
         return batch
 
     def train_from_experience(self):
+        """Runs one Double DQN gradient update on a sampled batch.
+
+        The target for each transition is
+        ``reward + gamma * Q_target(next_state, argmax Q_policy(next_state))``,
+        with the future term dropped for terminal transitions.
+        """
         batch = self.sample_experience()
         states, actions, rewards, next_states, dones = zip(*batch, strict=False)
 
@@ -182,6 +278,14 @@ class Agent:
         self.optimizer.step()
 
     def get_move(self, state):
+        """Returns the greedy action for an encoded state.
+
+        Args:
+            state: An encoded state of shape ``(N, N, 3)``.
+
+        Returns:
+            The index of the action with the highest Q-value.
+        """
         state = state.to(self.device)
         with torch.no_grad():
             q_values = self.policy_model(state)
@@ -189,11 +293,32 @@ class Agent:
         return action
 
     def act(self, plain_state):
-        """Greedy action for a plain (snake_position, price_position) state."""
+        """Returns the greedy action for a plain game state.
+
+        This is the inference entry point the server uses.
+
+        Args:
+            plain_state: A ``(snake_position, price_position)`` tuple, as
+                returned by ``SnakeEnv.get_state``.
+
+        Returns:
+            An action index into ``snake.game.ACTIONS``.
+        """
         return self.get_move(self.encode_state(plain_state))
 
     @staticmethod
     def encode_state(plain_state):
+        """Turns a plain game state into the network's input tensor.
+
+        Args:
+            plain_state: A ``(snake_position, price_position)`` tuple. The
+                snake positions are ``[x, y]`` pairs, head first.
+
+        Returns:
+            A float tensor of shape ``(N, N, 3)``, indexed as ``[x, y, c]``.
+            Channel 0 marks the head, channel 1 the rest of the body and
+            channel 2 the food.
+        """
         snake_position, price_position = plain_state
         grid_size = TileMap.TILE_COUNT.value
 
