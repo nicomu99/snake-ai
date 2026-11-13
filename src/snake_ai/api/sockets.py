@@ -3,7 +3,7 @@
 from json import JSONDecodeError
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket
 
 from .command_message import parse_message
 from .deps import get_registry
@@ -55,5 +55,5 @@ async def play(
                     "type": "error",
                     "message": "Message could not be decoded. Please send valid JSON."
                 })
-    except WebSocketDisconnect:
+    finally:
         await registry.detach(sink, session)

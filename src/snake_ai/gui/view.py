@@ -1,6 +1,6 @@
 from tkinter import Button, Canvas, Tk, font, messagebox
 
-from snake_ai.utils import TileMap
+from snake_ai.utils import TILE_COUNT, TILE_SIZE
 
 
 class View:
@@ -30,15 +30,15 @@ class View:
         self.canvas.grid(column=0, row=0, sticky="N W E S")
 
         self.root.geometry(
-            f"{TileMap.TILE_COUNT.value * TileMap.TILE_SIZE.value * 10}x"
-            f"{TileMap.TILE_COUNT.value * TileMap.TILE_SIZE.value * 10}")
+            f"{TILE_COUNT * TILE_SIZE * 10}x"
+            f"{TILE_COUNT * TILE_SIZE * 10}")
 
         self.start_button = Button(self.root, text="Start")
         self.start_button.grid(column=0, row=1, sticky="N W E S")
 
         # Create Background
-        for i in range(TileMap.TILE_COUNT.value):
-            for j in range(TileMap.TILE_COUNT.value):
+        for i in range(TILE_COUNT):
+            for j in range(TILE_COUNT):
                 self.create_tile(i, j, "white")
 
         # Positioned by the first render()
@@ -99,4 +99,4 @@ class View:
 
     @staticmethod
     def calculate_position(tile_id):
-        return tile_id * TileMap.TILE_SIZE.value * 10
+        return tile_id * TILE_SIZE * 10

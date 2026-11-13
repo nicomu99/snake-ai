@@ -81,8 +81,8 @@ class GameRunner:
             if self.sink is None:
                 return
             await self.sink.send_frame(message)
-        except Exception:
-            logger.exception("Sending frame failed")
+        except Exception as e:
+            logger.exception("Sending frame failed", exc_info=e)
 
     async def handle(
         self,
@@ -100,15 +100,24 @@ class GameRunner:
             case Reset():
                 await self.reset(command.seed)
             case Resume():
-                self.start_or_resume()
+                self.resume()
             case SetModel():
                 self.set_model(command.model_id)
             case Speed():
                 self.set_speed(command.tick_ms)
             case Start():
-                self.start_or_resume()
+                self.start()
 
-    def start_or_resume(self):
+    def start(self):
+        """Starts the game.
+
+        If the game is lost or won, the function does nothing.
+        """
+        if self.game.snake_env.lost or self.game.snake_env.won:
+            return
+        self.running.set()
+
+    def resume(self):
         """Lets the loop make moves."""
         self.running.set()
 
@@ -125,7 +134,7 @@ class GameRunner:
         # TODO: what to do with seed
         self.pause()
         self.game.reset()
-        await self.sink.send_frame(self.init_message())
+        await self.send_frame(self.init_message())
 
     def set_model(self, model_id: str):
         """Switches the model that plays the game. Not implemented yet."""
@@ -152,9 +161,8 @@ class GameRunner:
         if old_sink is not None:
             try:
                 await old_sink.close()
-            except RuntimeError:
-                # TODO
-                pass
+            except RuntimeError as e:
+                logging.exception(e)
 
         await self.sink.send_frame(self.init_message())
 
@@ -203,7 +211,8 @@ class GameRunner:
 
     def init_message(self) -> dict:
         """Returns the first frame sent to a client: ``{"game_id": ...}``."""
-        return {"game_id": self.id}
+        snapshot = self.game.snapshot()
+        return snapshot | {"game_id": self.id}
 
     def end_message(self):
         """Returns the frame sent when the game ends.

@@ -39,6 +39,7 @@ class Game:
     """
 
     def __init__(self, agent: Agent):
+        self.game_finished = False
         self.snake_env = SnakeEnv()
         self.agent = agent
         self._listeners = []
@@ -60,8 +61,10 @@ class Game:
         Returns:
             The plain state of the new game, see ``SnakeEnv.get_state``.
         """
+        self.game_finished = False
         self.step_count = 0
         state = self.snake_env.reset()
+        self._notify()
         return state
 
     def step(self, action):
@@ -75,11 +78,22 @@ class Game:
             A ``(reward, state, lost, won)`` tuple, see
             ``SnakeEnv.perform_move``.
         """
-        direction = ACTIONS[action] if isinstance(action, int) else action
+        if isinstance(action, int):
+            if action < 0 or action > 4:
+                raise ValueError(
+                    "Invalid action value. Must be between 0 and 3 inclusive.")
+            direction = ACTIONS[action] if isinstance(action, int) else action
+        else:
+            if action not in ACTIONS:
+                raise ValueError(f"Invalid action value. Must be in {ACTIONS}")
+            direction = action
         logger.debug("Performing move into direction %s", direction)
 
         reward, state, lost, won = self.snake_env.perform_move(direction)
-        self.step_count += 1
+        if not self.game_finished:
+            self.step_count += 1
+        if lost or won:
+            self.game_finished = True
         self._notify()
         return reward, state, lost, won
 

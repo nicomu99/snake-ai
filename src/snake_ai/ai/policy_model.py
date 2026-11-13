@@ -10,7 +10,7 @@ class PolicyModel(nn.Module):
     Two unpadded convolutions shrink a 5x5 board to a 64x3x1 feature map,
     which is flattened and passed through two fully connected layers. The
     ``Linear(192, 128)`` input size only works for a 5x5 board (see
-    ``TileMap.TILE_COUNT``).
+    ``utils.constants.TILE_COUNT``).
 
     The four outputs are in the order of ``snake.game.ACTIONS``:
     ``UP``, ``DOWN``, ``LEFT``, ``RIGHT``.
@@ -44,14 +44,7 @@ class PolicyModel(nn.Module):
         Returns:
             A tensor of shape ``(B, 4)`` with one Q-value per action.
         """
-        # input is (batch_size, height, width, channels)
-        # change first
-
         if x.ndim == 3:
             x = x.unsqueeze(0)
-
         x = x.permute(0, 3, 1, 2)
-        for _, layer in enumerate(self.sequential):
-            x = layer(x)
-        return x
-        # return self.sequential(x)
+        return self.sequential(x)

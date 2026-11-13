@@ -4,7 +4,7 @@ import copy
 import logging
 import random
 
-from snake_ai.utils import TileMap
+from snake_ai.utils import TILE_COUNT
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class SnakeEnv:
     """The raw state and rules of a Snake game.
 
-    The board is ``TileMap.TILE_COUNT`` tiles on each side and wraps at the
+    The board is ``TILE_COUNT`` tiles on each side and wraps at the
     edges, so it is a torus and there are no walls. The snake starts as a
     single tile at ``[0, 0]`` with no direction. Positions are ``[x, y]``
     lists, where ``y`` grows downwards. "Price" means the food throughout.
@@ -26,31 +26,22 @@ class SnakeEnv:
             snake grows into it after eating.
         direction: The direction of the last move, or ``None`` before the
             first move.
-        prev_direction: Every direction moved since the last reset.
         lost: Whether the game is lost.
         won: Whether the game is won.
         score: The amount of food eaten.
         price_position: The food's ``[x, y]`` position.
-        reward_decay: Unused.
-        min_reward: Unused.
     """
 
     def __init__(self):
-        self.snake_position = [[0, 0]]
-        self.last_snake_position = self.snake_position[0]
+        self.snake_position = None
+        self.last_snake_position = None
         self.direction = None
-        self.prev_direction = []
         self.lost = False
         self.won = False
         self.score = 0
+        self.price_position = None
 
-        self.price_position = [
-            random.randint(0, TileMap.TILE_COUNT.value - 1),
-            random.randint(0, TileMap.TILE_COUNT.value - 1)
-        ]
-
-        self.reward_decay = 0.995
-        self.min_reward = 0.1
+        self.reset()
 
     def reset(self):
         """Starts a new game with a one-tile snake and new food.
@@ -64,12 +55,8 @@ class SnakeEnv:
         self.lost = False
         self.won = False
         self.score = 0
-        self.prev_direction = []
 
-        self.price_position = [
-            random.randint(0, TileMap.TILE_COUNT.value - 1),
-            random.randint(0, TileMap.TILE_COUNT.value - 1)
-        ]
+        self._generate_price()
 
         return self.get_state()
 
@@ -88,7 +75,7 @@ class SnakeEnv:
 
     def game_won(self) -> bool:
         """Returns whether the snake fills the whole board."""
-        tile_count = TileMap.TILE_COUNT.value * TileMap.TILE_COUNT.value
+        tile_count = TILE_COUNT * TILE_COUNT
         return len(self.snake_position) == tile_count
 
     def handle_collision(self) -> bool:
@@ -96,7 +83,7 @@ class SnakeEnv:
 
         The snake grows by one tile at its previous tail position. If it now
         fills the board, the game is marked as won and no new food is placed.
-        Otherwise the food moves to a random free tile.
+        Otherwise, the food moves to a random free tile.
 
         Returns:
             True if the game is now won, otherwise False.
@@ -107,14 +94,16 @@ class SnakeEnv:
             self.won = True
             return True
 
-        # generate new random location of price
-        new_pricex = random.randint(0, TileMap.TILE_COUNT.value - 1)
-        new_pricey = random.randint(0, TileMap.TILE_COUNT.value - 1)
-        while [new_pricex, new_pricey] in self.snake_position:
-            new_pricex = random.randint(0, TileMap.TILE_COUNT.value - 1)
-            new_pricey = random.randint(0, TileMap.TILE_COUNT.value - 1)
-        self.price_position = [new_pricex, new_pricey]
+        self._generate_price()
         return False
+    
+    def _generate_price(self):
+        new_pricex = random.randint(0, TILE_COUNT - 1)
+        new_pricey = random.randint(0, TILE_COUNT - 1)
+        while [new_pricex, new_pricey] in self.snake_position:
+            new_pricex = random.randint(0, TILE_COUNT - 1)
+            new_pricey = random.randint(0, TILE_COUNT - 1)
+        self.price_position = [new_pricex, new_pricey]
 
     def get_state(self) -> tuple[list[list[int]], list[int]]:
         """Returns the plain game state.
@@ -125,7 +114,7 @@ class SnakeEnv:
         Returns:
             A ``(snake_position, price_position)`` tuple.
         """
-        return self.snake_position, self.price_position
+        return copy.deepcopy(self.snake_position), copy.deepcopy(self.price_position)
 
     @staticmethod
     def get_wrapped_distance(pos1, pos2):
@@ -140,7 +129,7 @@ class SnakeEnv:
         Returns:
             The distance as a float.
         """
-        grid_size = TileMap.TILE_COUNT.value
+        grid_size = TILE_COUNT
         dx = abs(pos1[0] - pos2[0])
         dy = abs(pos1[1] - pos2[1])
         dx = min(dx, grid_size - dx)
@@ -168,8 +157,14 @@ class SnakeEnv:
             result of ``get_state``.
 
         Raises:
-            Exception: If ``direction`` is not one of the four directions.
+            ValueError: If ``direction`` is not one of the four directions.
         """
+        if self.won or self.lost:
+            return 0, self.get_state(), self.lost, self.won
+        
+        if direction not in ["DOWN", "UP", "LEFT", "RIGFHT"]:
+            raise ValueError(f"Invalid direction detected {direction}")
+        
         # Check for invalid move (reversing direction)
         if (
             self.direction == "DOWN" and direction == "UP" or
@@ -195,17 +190,13 @@ class SnakeEnv:
         head_pos = self.snake_position[0]
 
         if direction == "DOWN":
-            head_pos[1] = (head_pos[1] + 1) % TileMap.TILE_COUNT.value
+            head_pos[1] = (head_pos[1] + 1) % TILE_COUNT
         elif direction == "UP":
-            head_pos[1] = (head_pos[1] - 1) % TileMap.TILE_COUNT.value
+            head_pos[1] = (head_pos[1] - 1) % TILE_COUNT
         elif direction == "LEFT":
-            head_pos[0] = (head_pos[0] - 1) % TileMap.TILE_COUNT.value
+            head_pos[0] = (head_pos[0] - 1) % TILE_COUNT
         elif direction == "RIGHT":
-            head_pos[0] = (head_pos[0] + 1) % TileMap.TILE_COUNT.value
-        else:
-            raise Exception(f"Invalid direction detected {direction}")
-
-        self.prev_direction.append(direction)
+            head_pos[0] = (head_pos[0] + 1) % TILE_COUNT
 
         # Calculate Euclidean distances to the treasure
         prev_distance = self.get_wrapped_distance(prev_head_pos, self.price_position)
@@ -216,10 +207,10 @@ class SnakeEnv:
 
         # Check collision with treasure
         if self.is_price_collision():
+            self.score += 1
             if self.handle_collision():
                 reward = 100
-                return reward, self.get_state, self.lost, self.won
-            self.score += 1
+                return reward, self.get_state(), self.lost, self.won
             reward += 20  # Increased reward for finding treasure
             return reward, self.get_state(), self.lost, self.won
 
@@ -237,9 +228,5 @@ class SnakeEnv:
 
         # Small penalty per step to encourage efficiency
         reward -= 0.1
-
-        # Add logging
-        # print(f"Action: {direction}, Reward: {reward}, \
-        # Position: {self.snake_position[0]}, Treasure: {self.price_position}")
 
         return reward, self.get_state(), self.lost, self.won

@@ -3,6 +3,7 @@
 import logging
 import random
 from collections import deque
+from pathlib import Path
 
 import torch
 from torch.nn import MSELoss
@@ -10,7 +11,7 @@ from torch.optim import Adam
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from snake_ai.utils import TileMap
+from snake_ai.utils import TILE_COUNT
 
 from .policy_model import PolicyModel
 
@@ -50,18 +51,16 @@ class Agent:
         device: ``"cuda"`` if available, otherwise ``"cpu"``.
     """
 
-    def __init__(self):
+    def __init__(self, model_path: str = "policy_models"):
         """Builds both networks and sets the training hyperparameters.
 
         The networks start with random weights. Call ``load_model`` or
         ``train_or_load_model`` to get a trained agent.
         """
-        print("Initializing Agent")
+        logger.info("Initializing agent")
 
-        self.input_space = TileMap.TILE_COUNT.value
         self.policy_model = PolicyModel(3)
         self.target_model = PolicyModel(3)
-        self.target_model.load_state_dict(self.policy_model.state_dict())
 
         self.optimizer = Adam(self.policy_model.parameters(), lr=0.001)
         self.criterion = MSELoss(reduction="mean")
@@ -82,15 +81,18 @@ class Agent:
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if self.device != "cuda":
-            print(f"Warning: Using {self.device} to train the model")
+            logger.warning("Using %s to train the model", self.device)
         self.policy_model.to(self.device)
         self.target_model.to(self.device)
+
+        self.model_path = Path(model_path)
+        self.model_file = self.model_path / "model.pt"
 
     def train_or_load_model(self, env):
         """Loads the saved model, or trains a new one if none can be loaded.
 
         A newly trained model is saved to ``policy_models/model.pt`` and the
-        environment is reset afterwards.
+        environment is reset afterward.
 
         Args:
             env: The environment to train on. It must provide ``reset()``
@@ -98,40 +100,36 @@ class Agent:
         """
         # Try to load an existing model
         try:
-            self.policy_model.load_state_dict(
-                torch.load("policy_models/model.pt"))
-            self.update_target_model()
-            print("Model Loaded")
-            return
-        except Exception:
-            print("No Model Found")
+            self.load_model()
+        except Exception as e:
+            logger.error("No model found", exc_info=e)
 
         # Train the agent if no model is found
-        print("Training Agent")
+        logger.info("Starting agent training")
         self.train(env)
 
-        print("\nAgent Trained")
+        logger.info("Finished training agent")
 
         # Save the trained model
-        torch.save(self.policy_model.state_dict(), "policy_models/model.pt")
+        self.model_path.mkdir(parents=True, exist_ok=True)
+        torch.save(self.policy_model.state_dict(), self.model_file)
         env.reset()
 
     def load_model(self):
         """Loads the policy weights from ``policy_models/model.pt``.
 
         The path is relative to the current working directory. The target
-        network is synced afterwards. If loading fails for any reason, the
+        network is synced afterward. If loading fails for any reason, the
         error is swallowed and the agent keeps its random weights.
+        
+        Raises:
+            FileNotFoundError: If the model file could not be found.
         """
         # Try to load an existing model
-        try:
-            self.policy_model.load_state_dict(
-                torch.load("policy_models/model.pt"))
-            self.update_target_model()
-            print("Model Loaded")
-            return
-        except Exception:
-            print("No Model Found")
+        self.policy_model.load_state_dict(
+            torch.load(self.model_file, map_location=self.device))
+        self.update_target_model()
+        logger.info("Model loaded")
 
     def update_target_model(self):
         """Copies the policy network's weights into the target network."""
@@ -153,10 +151,10 @@ class Agent:
         else:
             action = self.get_move(state)
 
-        reward, new_state, done = env.step(action)
+        reward, new_state, lost, won = env.step(action)
         new_state = self.encode_state(new_state)
 
-        return reward, new_state, action, done
+        return reward, new_state, action, lost or won
 
     def train(self, env):
         """Runs the training loop for ``train_steps`` environment steps.
@@ -170,14 +168,10 @@ class Agent:
                 and ``step(action)``.
         """
         state = self.encode_state(env.reset())
-        avg_score = []
+        score = []
         episode_score = 0
-        with logging_redirect_tqdm():
+        with ((logging_redirect_tqdm())):
             for _ in tqdm(range(self.train_steps)):
-                # Decay epsilon after each episode
-                if self.epsilon > self.epsilon_min:
-                    self.epsilon *= self.epsilon_decay
-
                 reward, next_state, action, done = self.play_one_step(state, env)
 
                 self.store_experience(state, action, reward, next_state, done)
@@ -187,8 +181,12 @@ class Agent:
 
                 if done:
                     state = self.encode_state(env.reset())
-                    avg_score.append(episode_score)
+                    score.append(episode_score)
                     episode_score = 0
+
+                    # Decay epsilon after each episode
+                    if self.epsilon > self.epsilon_min:
+                        self.epsilon *= self.epsilon_decay
 
                 if (
                     self.steps > self.learning_starts and
@@ -199,18 +197,11 @@ class Agent:
                 if self.steps % self.update_target_steps == 0:
                     self.update_target_model()
 
-                if len(self.experience_replay) >= self.batch_size:
-                    self.train_from_experience()
-
                 if self.steps % (self.update_target_steps * 10) == 0:
+                    avg_score = sum(score) / len(score) if len(score) > 0 else 0
                     logger.info(
-                        "Average episode score: %.3f",
-                        sum(avg_score) / len(avg_score))
-
-        # print(
-        #     f"Episode {episode + 1}/{n_episodes}, "
-        #     f"Total Reward: {total_reward:.2f}, Epsilon: {self.epsilon:.3f}"
-        # )
+                        "Average episode score: %.3f", avg_score
+                    )
 
     def store_experience(self, state, action, reward, next_state, done):
         """Adds one transition to the replay buffer.
@@ -320,7 +311,7 @@ class Agent:
             channel 2 the food.
         """
         snake_position, price_position = plain_state
-        grid_size = TileMap.TILE_COUNT.value
+        grid_size = TILE_COUNT
 
         # Initialize the state grid with zeros for each channel
         # We will use 3 channels:

@@ -80,7 +80,7 @@ class GameRunnerRegistry:
             *(runner.aclose() for _, runner in runners),
             return_exceptions=True
         )
-        for runner_id, _, result in zip(runners, results, strict=True):
+        for (runner_id, _), result in zip(runners, results, strict=True):
             if result is None:
                 continue
             logger.error("Runner %s failed", runner_id, exc_info=result)
