@@ -36,6 +36,6 @@ class Controller:
         self._agent_step(self.AGENT_STEPS)
 
     def _agent_step(self, steps_left):
-        _reward, _state, done = self.session.agent_step()
-        if not done and steps_left > 1:
+        _reward, _state, done, won = self.session.agent_step()
+        if not done and not won and steps_left > 1:
             self.view.schedule(self.AGENT_DELAY_MS, self._agent_step, steps_left - 1)

@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 # import redis.asyncio as redis
 from fastapi import FastAPI
 
-from snake_ai.ai import Agent
+from snake_ai.ai import DQNTrainer
 from snake_ai.api import GameRunnerRegistry
 from snake_ai.api.game_runner_sweeper import GameRunnerSweeper
 from snake_ai.api.sockets import router
@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
         None. Control returns to FastAPI while the server is running.
     """
     # redis_url = "redis://localhost:6379"      # TODO: url
-    agent = Agent()
+    agent = DQNTrainer()
     agent.load_model()
     app.state.agent = agent
     # app.state.redis = redis.Redis.from_url(redis_url, decode_responses=True)

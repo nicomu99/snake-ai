@@ -98,6 +98,7 @@ class SnakeEnv:
         return False
     
     def _generate_price(self):
+        """Places the food on a random tile that the snake doesn't cover."""
         new_pricex = random.randint(0, TILE_COUNT - 1)
         new_pricey = random.randint(0, TILE_COUNT - 1)
         while [new_pricex, new_pricey] in self.snake_position:
@@ -108,8 +109,7 @@ class SnakeEnv:
     def get_state(self) -> tuple[list[list[int]], list[int]]:
         """Returns the plain game state.
 
-        The returned lists are the env's own lists, not copies, so they
-        change with the next move.
+        The returned lists are deep copies, so later moves don't change them.
 
         Returns:
             A ``(snake_position, price_position)`` tuple.
@@ -139,7 +139,8 @@ class SnakeEnv:
     def perform_move(self, direction):
         """Moves the snake one tile and returns the shaped reward.
 
-        The checks run in this order:
+        If the game is already lost or won, nothing happens and the reward
+        is 0. Otherwise, the checks run in this order:
 
         1. Reversing the current direction loses the game (reward -10). The
            snake does not move.
@@ -162,7 +163,7 @@ class SnakeEnv:
         if self.won or self.lost:
             return 0, self.get_state(), self.lost, self.won
         
-        if direction not in ["DOWN", "UP", "LEFT", "RIGFHT"]:
+        if direction not in ["DOWN", "UP", "LEFT", "RIGHT"]:
             raise ValueError(f"Invalid direction detected {direction}")
         
         # Check for invalid move (reversing direction)

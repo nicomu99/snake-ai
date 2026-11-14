@@ -1,4 +1,4 @@
-"""The convolutional Q-network used by the agent."""
+"""The convolutional Q-network that ``Policy`` wraps."""
 
 import torch
 import torch.nn as nn
@@ -17,7 +17,7 @@ class PolicyModel(nn.Module):
 
     Args:
         in_channels: The number of channels per tile in the encoded state
-            (3 for head, body and food, see ``Agent.encode_state``).
+            (3 for head, body and food, see ``Policy.encode_state``).
     """
 
     def __init__(self, in_channels: int):

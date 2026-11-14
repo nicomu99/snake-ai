@@ -1,7 +1,7 @@
 """Snake game rules and the headless game wrapper.
 
 Exports:
-    Game: Wraps a ``SnakeEnv`` and an agent, and notifies listeners.
+    Game: Wraps a ``SnakeEnv`` and a ``Policy``, and notifies listeners.
     SnakeEnv: The raw game state and rules.
 """
 

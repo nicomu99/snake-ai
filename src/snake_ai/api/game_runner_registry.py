@@ -5,7 +5,7 @@ import asyncio
 import logging
 
 # import redis.asyncio as redis
-from snake_ai.ai import Agent
+from snake_ai.ai import DQNTrainer
 from snake_ai.api.game_runner import GameRunner
 from snake_ai.api.web_socket_sink import WebSocketSink
 
@@ -23,7 +23,7 @@ class GameRunnerRegistry:
         agent: The shared agent that every new game uses.
     """
 
-    def __init__(self, agent: Agent, ):  # r: redis.Redis):
+    def __init__(self, agent: DQNTrainer, ):  # r: redis.Redis):
         # self._r = r
         self._agent = agent
         self._runners: dict[str, GameRunner] = {}

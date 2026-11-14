@@ -7,7 +7,7 @@ Attributes:
 
 import logging
 
-from snake_ai.ai import Agent
+from snake_ai.ai import DQNTrainer, Policy
 
 from .snake_env import SnakeEnv
 
@@ -20,35 +20,35 @@ ACTIONS = ("UP", "DOWN", "LEFT", "RIGHT")
 class Game:
     """A headless game core that knows nothing about how it is displayed.
 
-    ``Game`` wraps a ``SnakeEnv``, lets an agent choose moves, counts steps
-    and notifies subscribed listeners with a serializable snapshot after
-    every move. Frontends (the WebSocket server, the Tk GUI) build on top of
-    it.
+    ``Game`` wraps a ``SnakeEnv``, lets a ``Policy`` choose moves, counts
+    steps and notifies subscribed listeners with a serializable snapshot
+    after every move and reset. Frontends (the WebSocket server, the Tk GUI)
+    build on top of it.
 
     ``Game`` also provides ``reset()`` and ``step(action)``, so it can be
-    passed to ``Agent.train`` as the training environment.
+    passed to ``DQNTrainer.train`` as the training environment.
 
     Args:
-        agent: The agent that picks moves in ``agent_step``. It can be shared
-            between games.
+        policy: The policy that picks moves in ``agent_step``. It can be
+            shared between games.
 
     Attributes:
         snake_env: The underlying game state and rules.
-        agent: The agent used by ``agent_step``.
-        step_count: The number of moves since the last reset.
+        policy: The policy used by ``agent_step``.
+        step_count: The number of moves since the last reset. Moves made
+            after the game has ended are not counted.
+        game_finished: Whether the current game has been lost or won.
     """
 
-    def __init__(self, agent: Agent):
+    def __init__(self, policy: Policy):
         self.game_finished = False
         self.snake_env = SnakeEnv()
-        self.agent = agent
+        self.policy = policy
         self._listeners = []
         self.step_count = 0
 
     def subscribe(self, listener):
-        """Registers a listener that is called after every move.
-
-        Listeners are not called on ``reset``.
+        """Registers a listener that is called after every move and reset.
 
         Args:
             listener: A callable that takes the dict returned by ``snapshot``.
@@ -56,7 +56,7 @@ class Game:
         self._listeners.append(listener)
 
     def reset(self):
-        """Starts a new game and resets the step counter.
+        """Starts a new game, resets the step counter and notifies listeners.
 
         Returns:
             The plain state of the new game, see ``SnakeEnv.get_state``.
@@ -70,6 +70,10 @@ class Game:
     def step(self, action):
         """Performs one move and notifies the listeners.
 
+        Once the game is lost or won, further moves leave the board as it
+        is, return a reward of 0 and don't increase ``step_count``. The
+        listeners are still notified.
+
         Args:
             action: A direction string (``"UP"``, ``"DOWN"``, ``"LEFT"``,
                 ``"RIGHT"``) or an index into ``ACTIONS``.
@@ -77,9 +81,12 @@ class Game:
         Returns:
             A ``(reward, state, lost, won)`` tuple, see
             ``SnakeEnv.perform_move``.
+
+        Raises:
+            ValueError: If ``action`` is not a valid direction or index.
         """
         if isinstance(action, int):
-            if action < 0 or action > 4:
+            if action < 0 or action > 3:
                 raise ValueError(
                     "Invalid action value. Must be between 0 and 3 inclusive.")
             direction = ACTIONS[action] if isinstance(action, int) else action
@@ -98,13 +105,13 @@ class Game:
         return reward, state, lost, won
 
     def agent_step(self):
-        """Lets the agent choose one greedy move and performs it.
+        """Lets the policy choose one greedy move and performs it.
 
         Returns:
             A ``(reward, state, lost, won)`` tuple, see
             ``SnakeEnv.perform_move``.
         """
-        action = self.agent.act(self.snake_env.get_state())
+        action = self.policy.act(self.snake_env.get_state())
         return self.step(action)
 
     def snapshot(self):
@@ -136,7 +143,7 @@ class Game:
         """Returns the game as a dict for persistence (same as ``snapshot``)."""
         return self.snapshot()
 
-    def from_dict(self, agent: Agent):
+    def from_dict(self, agent: DQNTrainer):
         """Restores a game from ``to_dict`` output. Not implemented yet."""
         # todo
         pass

@@ -1,7 +1,9 @@
-"""The Double DQN agent and its Q-network."""
+"""The Snake-playing policy and its Double DQN trainer."""
 
-from .agent import Agent
+from .dqn_trainer import DQNTrainer
+from .policy import Policy
 
 __all__ = [
-    "Agent",
+    "DQNTrainer",
+    "Policy",
 ]

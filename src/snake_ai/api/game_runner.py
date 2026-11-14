@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 
-from snake_ai.ai import Agent
+from snake_ai.ai import DQNTrainer
 from snake_ai.snake import Game
 
 from .command_message import Pause, Reset, Resume, SetModel, Speed, Start
@@ -45,7 +45,7 @@ class GameRunner:
 
     _DELETION_DELAY = 5     # seconds
 
-    def __init__(self, agent: Agent):
+    def __init__(self, agent: DQNTrainer):
         self.id = uuid.uuid4().hex[:12]
         self._agent = agent
         self.game = Game(self._agent)
