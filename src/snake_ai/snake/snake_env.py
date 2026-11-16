@@ -96,7 +96,7 @@ class SnakeEnv:
 
         self._generate_price()
         return False
-    
+
     def _generate_price(self):
         """Places the food on a random tile that the snake doesn't cover."""
         new_pricex = random.randint(0, TILE_COUNT - 1)
@@ -106,15 +106,19 @@ class SnakeEnv:
             new_pricey = random.randint(0, TILE_COUNT - 1)
         self.price_position = [new_pricex, new_pricey]
 
-    def get_state(self) -> tuple[list[list[int]], list[int]]:
+    def get_state(self) -> tuple[list[list[int]], list[int], str | None]:
         """Returns the plain game state.
 
         The returned lists are deep copies, so later moves don't change them.
 
         Returns:
-            A ``(snake_position, price_position)`` tuple.
+            A ``(snake_position, price_position, direction)`` tuple.
         """
-        return copy.deepcopy(self.snake_position), copy.deepcopy(self.price_position)
+        return (
+            copy.deepcopy(self.snake_position),
+            copy.deepcopy(self.price_position),
+            self.direction,
+        )
 
     @staticmethod
     def get_wrapped_distance(pos1, pos2):
@@ -162,10 +166,10 @@ class SnakeEnv:
         """
         if self.won or self.lost:
             return 0, self.get_state(), self.lost, self.won
-        
+
         if direction not in ["DOWN", "UP", "LEFT", "RIGHT"]:
             raise ValueError(f"Invalid direction detected {direction}")
-        
+
         # Check for invalid move (reversing direction)
         if (
             self.direction == "DOWN" and direction == "UP" or

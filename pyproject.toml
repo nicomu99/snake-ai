@@ -28,7 +28,7 @@ build-backend = "uv_build"
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B"]
+select = ["E", "F", "I", "B", "W"]
 
 [dependency-groups]
 dev = [

@@ -80,7 +80,7 @@ class DQNTrainer:
         self.epsilon_decay = 0.99
         self.epsilon_min = 0.1
         self.gamma = 0.95
-        
+
         self.train_steps = 200_000
         self.learning_starts = 10_000
 
