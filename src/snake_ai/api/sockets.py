@@ -24,12 +24,14 @@ async def play(
 
     Without a ``game_id``, or with an unknown one, a new game is created.
     With a known id, the client takes over that game, and any other client
-    connected to it is disconnected. The first frame sent is always the
-    current snapshot plus a ``game_id`` key, which the client can keep to
+    connected to it is disconnected. Every message the server sends has a
+    ``type`` field. The first one is always an ``init_message``: the
+    current snapshot plus a ``game_id``, which the client can keep to
     reconnect later.
 
-    After that, the server sends a snapshot (see ``Game.snapshot``) after
-    every move, and an end message when the game is lost or won. The client
+    After that, the server sends a ``snapshot`` message (see
+    ``GameRunner.snapshot``) after every move, and an ``end_message`` (see
+    ``GameRunner.end_message``) when the game is lost or won. The client
     sends commands as JSON objects (see ``command_message``). Invalid input
     gets ``{"type": "error", "message": ...}`` back.
 
