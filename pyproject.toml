@@ -9,16 +9,13 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.162.2",
-    "numpy>=2.5.4",
     "pydantic>=2.14.3",
+    "pylint>=4.1.4",
     "redis>=8.1.0",
     "torch>=2.15.0",
     "tqdm>=4.70.1",
     "websockets>=17.4",
 ]
-
-[project.scripts]
-snake-ai = "snake_ai.main:main"
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]
