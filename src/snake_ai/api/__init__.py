@@ -1,4 +1,4 @@
-"""The WebSocket server that streams agent-played games to clients.
+"""The WebSocket server that streams games played by the policy to clients.
 
 Exports:
     GameRunnerRegistry: Keeps track of all running games.

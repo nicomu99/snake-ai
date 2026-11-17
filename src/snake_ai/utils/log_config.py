@@ -1,50 +1,57 @@
 """Logging configuration for the Snake AI package.
 
-Logs from every logger go to the console and to a rotating file. The file is
-``app.log`` in the current working directory, holds at most 10 MB, and keeps
-three backups. The root logger logs at ``DEBUG``. ``urllib3`` is limited to
-``WARNING`` because it is noisy.
-
-Attributes:
-    LOGGING (dict): The ``logging.config.dictConfig`` schema that
-        ``configure_logging`` applies.
+Logs from every logger go to the console and to a rotating file. The file
+path (``Settings.log_path``) and the root log level (``Settings.log_level``)
+come from the settings. The file holds at most 10 MB and keeps three
+backups. ``urllib3`` is limited to ``WARNING`` because it is noisy.
 """
 
 import logging.config
 
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "standard": {
-            "format": "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
-            "datefmt": "%Y-%m-%d %H:%M:%S",
-        },
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "standard",
-        },
-        "file": {
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": "app.log",
-            "maxBytes": 10_000_000,
-            "backupCount": 3,
-            "formatter": "standard",
-        },
-    },
-    "root": {"level": "DEBUG", "handlers": ["console", "file"]},
-    "loggers": {
-        "urllib3": {"level": "WARNING"},  # quiet noisy dependencies
-    },
-}
+from .settings import get_settings
 
 
 def configure_logging():
-    """Applies the ``LOGGING`` configuration to the logging system.
+    """Configures console and rotating file logging from the settings.
 
-    Call this once at startup, before any log messages are written. Loggers
-    that already exist stay enabled.
+    Reads the settings, creates the log file's directory if needed and
+    applies the configuration with ``logging.config.dictConfig``. Call this
+    once at startup, before any log messages are written. Loggers that
+    already exist stay enabled.
+
+    Raises:
+        pydantic.ValidationError: If a ``SNAKE_AI_*`` environment variable
+            holds an invalid value.
     """
-    logging.config.dictConfig(LOGGING)
+    settings = get_settings()
+    settings.log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    logging_dict = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "standard": {
+                "format": "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "standard",
+            },
+            "file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "filename": settings.log_path,
+                "maxBytes": 10_000_000,
+                "backupCount": 3,
+                "formatter": "standard",
+            },
+        },
+        "root": {"level": settings.log_level, "handlers": ["console", "file"]},
+        "loggers": {
+            "urllib3": {"level": "WARNING"},  # quiet noisy dependencies
+        },
+    }
+
+    logging.config.dictConfig(logging_dict)

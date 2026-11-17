@@ -6,14 +6,7 @@ Attributes:
         network and the saved models.
     TILE_SIZE (int): The base tile size for the Tk GUI. ``gui.view`` scales
         it by 10 to get the tile size in pixels.
-    MODEL_BASE_PATH (Path): The directory that trained models are saved to
-        and loaded from by default. It is relative to the current working
-        directory.
 """
-
-from pathlib import Path
 
 TILE_COUNT = 5
 TILE_SIZE = 30
-
-MODEL_BASE_PATH = Path("policy_models")

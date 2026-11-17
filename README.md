@@ -64,7 +64,7 @@ Within each category, bugs come first, then unfinished features, then cleanup.
 
 ### Project & tooling
 
-- [ ] 🟢 Fix the `snake-ai` script in `pyproject.toml`: it points at `snake_ai.main:main`, which only builds the FastAPI app and doesn't start a server.
-- [ ] 🟢 Remove the need to run from the repo root: the model is loaded from the relative path `policy_models/model.pt` and logs go to `./app.log`, so running from another directory fails to find the model and writes logs in the wrong place.
-- [ ] 🟢 Make the logging setup configurable: the root level is hard-coded to `DEBUG` and the log file path to `app.log`. Read both from settings or environment variables.
+- [x] 🟢 Fix the `snake-ai` script in `pyproject.toml`: it points at `snake_ai.main:main`, which only builds the FastAPI app and doesn't start a server.
+- [x] 🟢 Remove the need to run from the repo root: the model is loaded from the relative path `policy_models/model.pt` and logs go to `./app.log`, so running from another directory fails to find the model and writes logs in the wrong place.
+- [x] 🟢 Make the logging setup configurable: the root level is hard-coded to `DEBUG` and the log file path to `app.log`. Read both from settings or environment variables.
 - [ ] 🟡 Add tests. There are none yet. Good first targets are `SnakeEnv` (moves, wrapping, eating, winning, losing), `parse_message`, and the `GameRunner` lifecycle (attach, detach, expire).

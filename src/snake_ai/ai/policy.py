@@ -6,7 +6,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from snake_ai.utils import MODEL_BASE_PATH, TILE_COUNT
+from snake_ai.utils import TILE_COUNT
 
 from .policy_model import PolicyModel
 
@@ -48,7 +48,7 @@ class Policy(nn.Module):
     def load_model(
         cls,
         model_file: str,
-        model_path: str | Path = MODEL_BASE_PATH
+        model_path: str | Path,
     ) -> "Policy":
         """Creates a policy and loads saved weights into it.
 
@@ -57,10 +57,9 @@ class Policy(nn.Module):
 
         Args:
             model_file: The file name of the saved state dict, e.g.
-                ``"model.pt"``.
-            model_path: The directory that contains ``model_file``. Defaults
-                to ``MODEL_BASE_PATH`` (``policy_models``), which is relative
-                to the current working directory.
+                ``"model.pt"``, relative to ``model_path``. An absolute path
+                is used as is and ``model_path`` is ignored.
+            model_path: The directory that contains ``model_file``.
 
         Returns:
             A new ``Policy`` with the loaded weights.

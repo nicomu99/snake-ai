@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 
-from snake_ai.ai import DQNTrainer
+from snake_ai.ai import Policy
 from snake_ai.snake import Game
 
 from .command_message import Pause, Reset, Resume, SetModel, Speed, Start
@@ -18,7 +18,7 @@ class GameRunner:
     """Owns one ``Game`` and plays it in an asyncio task.
 
     The loop waits until the runner is started, then on each tick lets the
-    agent make a move, sends the snapshot to the attached sink and sleeps for
+    policy pick a move, sends the snapshot to the attached sink and sleeps for
     ``tick_ms``. When the game is lost or won, it sends an end message and
     pauses.
 
@@ -30,7 +30,8 @@ class GameRunner:
     the loop task.
 
     Args:
-        agent: The shared agent that plays the game.
+        policy: The policy that plays the game. It is shared with the other
+            runners and only used for inference.
 
     Attributes:
         id: A random id of 12 hex characters.
@@ -45,10 +46,10 @@ class GameRunner:
 
     _DELETION_DELAY = 5     # seconds
 
-    def __init__(self, agent: DQNTrainer):
+    def __init__(self, policy: Policy):
         self.id = uuid.uuid4().hex[:12]
-        self._agent = agent
-        self.game = Game(self._agent)
+        self._policy = policy
+        self.game = Game(self._policy)
         self.sink = None
 
         self.running = asyncio.Event()
@@ -57,7 +58,7 @@ class GameRunner:
         self.detached_since: float | None = None
 
     async def _loop(self):
-        """Plays the game while ``running`` is set, until cancelled."""
+        """Plays the game while ``running`` is set, until canceled."""
         logger.info("Starting game session loop")
         while True:
             await self.running.wait()
@@ -68,7 +69,7 @@ class GameRunner:
                 await self.send_frame(self.end_message())
                 self.pause()
             await asyncio.sleep(self.tick_ms / 1000)
-    
+
     async def send_frame(self, message: dict):
         """Sends a message to the sink, if one is attached.
 
@@ -210,7 +211,7 @@ class GameRunner:
             logger.info("Game session %s stopped", self.id)
 
     def init_message(self) -> dict:
-        """Returns the first frame sent to a client: ``{"game_id": ...}``."""
+        """Returns the first frame sent to a client: the snapshot plus ``game_id``."""
         snapshot = self.game.snapshot()
         return snapshot | {"game_id": self.id}
 

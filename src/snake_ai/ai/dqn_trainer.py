@@ -5,14 +5,13 @@ import logging
 import random
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 
 import torch
 from torch.nn import MSELoss
 from torch.optim import Adam
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
-
-from snake_ai.utils import MODEL_BASE_PATH
 
 from .policy import Policy
 
@@ -91,17 +90,18 @@ class DQNTrainer:
 
         self.device = self.policy.device
 
-    def train(self, env):
+    def train(self, env, model_path: str | Path):
         """Trains the policy and saves its weights.
 
         Runs ``run_train`` and then saves the policy's state dict to
-        ``MODEL_BASE_PATH / "<timestamp>_model_<train_steps>.pt"``, with the
+        ``model_path / "<timestamp>_model_<train_steps>.pt"``, with the
         timestamp formatted as ``%Y-%m-%d_%H:%M:%S``. The directory is
         created if needed. The environment is reset afterward.
 
         Args:
             env: The environment to train on. It must provide ``reset()``
                 and ``step(action)``.
+            model_path: The directory the trained model is saved to.
         """
         # Train the agent if no model is found
         logger.info("Starting agent training")
@@ -110,9 +110,10 @@ class DQNTrainer:
         logger.info("Finished training agent")
 
         # Save the trained model
-        MODEL_BASE_PATH.mkdir(parents=True, exist_ok=True)
+        model_path = Path(model_path)
+        model_path.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-        model_file = MODEL_BASE_PATH / f"{timestamp}_model_{self.train_steps}.pt"
+        model_file = model_path / f"{timestamp}_model_{self.train_steps}.pt"
         torch.save(self.policy.state_dict(), model_file)
         env.reset()
 

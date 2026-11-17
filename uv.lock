@@ -1687,6 +1687,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "pylint" },
     { name = "redis" },
     { name = "torch" },
@@ -1703,6 +1704,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.162.2" },
     { name = "pydantic", specifier = ">=2.14.3" },
+    { name = "pydantic-settings", specifier = ">=2.16.2" },
     { name = "pylint", specifier = ">=4.1.4" },
     { name = "redis", specifier = ">=8.1.0" },
     { name = "torch", specifier = ">=2.15.0" },

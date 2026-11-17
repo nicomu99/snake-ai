@@ -5,7 +5,7 @@ import asyncio
 import logging
 
 # import redis.asyncio as redis
-from snake_ai.ai import DQNTrainer
+from snake_ai.ai import Policy
 from snake_ai.api.game_runner import GameRunner
 from snake_ai.api.web_socket_sink import WebSocketSink
 
@@ -20,12 +20,12 @@ class GameRunnerRegistry:
     persistence backend.
 
     Args:
-        agent: The shared agent that every new game uses.
+        policy: The shared policy that every new game uses.
     """
 
-    def __init__(self, agent: DQNTrainer, ):  # r: redis.Redis):
+    def __init__(self, policy: Policy):  # , r: redis.Redis):
         # self._r = r
-        self._agent = agent
+        self._policy = policy
         self._runners: dict[str, GameRunner] = {}
 
     async def attach(self, sink: WebSocketSink, game_runner_id: str | None):
@@ -42,7 +42,7 @@ class GameRunnerRegistry:
         """
         logger.info("Attaching new sink")
         if game_runner_id is None or not self.check_key(game_runner_id):
-            runner = GameRunner(self._agent)
+            runner = GameRunner(self._policy)
             await self.add(runner)
         else:
             runner = await self.get(game_runner_id)
