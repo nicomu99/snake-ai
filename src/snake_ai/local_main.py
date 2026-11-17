@@ -34,12 +34,12 @@ def main(train: bool, model_file: str):
             not exist.
     """
     configure_logging()
-    
+
     if train:
         policy = Policy()
     else:
         policy = Policy.load_model(model_file=model_file)
-    
+
     game = Game(policy)
 
     if train:
