@@ -50,8 +50,8 @@ Within each category, bugs come first, then unfinished features, then cleanup.
 ### WebSocket server
 
 - [ ] 🟢 Watch the runner's loop task: if `agent_step` raises, the task dies silently and the game just freezes. The exception only shows up when the task is awaited on shutdown. Add a done-callback that logs it (and maybe notifies the client).
-- [ ] 🟢 The end message's `reason` is `"collision"` for every loss, including reversing direction. Report the actual reason.
-- [ ] 🟡 Give every server message a `type` field. Snapshots, the init message and the end message have none (only errors do), so clients have to guess the message kind from its keys. This changes the protocol, so clients need updating too.
+- [x] 🟢 The end message's `reason` is `"collision"` for every loss, including reversing direction. Report the actual reason.
+- [x] 🟡 Give every server message a `type` field. Snapshots, the init message and the end message have none (only errors do), so clients have to guess the message kind from its keys. This changes the protocol, so clients need updating too.
 - [ ] 🟡 Implement the `set_model` command (currently a stub). This needs a way to list and load the models in `policy_models/`, and an agent per model instead of one shared agent.
 - [ ] 🟡 `agent_step` runs the PyTorch inference synchronously on the event loop. With many games this blocks the loop and makes the ticks uneven. `asyncio.to_thread` is a medium fix. Batching inference across games is larger (🔴).
 - [ ] 🟡 Limit how many games can exist. Every connection without a known `game_id` creates a runner, and anyone who knows a `game_id` can take over that game. Consider a cap on runners and/or a secret token per game.

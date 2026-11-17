@@ -63,7 +63,7 @@ class GameRunner:
         while True:
             await self.running.wait()
             self.game.agent_step()
-            snapshot = self.game.snapshot()
+            snapshot = self.snapshot()
             await self.send_frame(snapshot)
             if self.game.snake_env.lost or self.game.snake_env.won:
                 await self.send_frame(self.end_message())
@@ -210,22 +210,39 @@ class GameRunner:
         except asyncio.CancelledError:
             logger.info("Game session %s stopped", self.id)
 
-    def init_message(self) -> dict:
-        """Returns the first frame sent to a client: the snapshot plus ``game_id``."""
+    def snapshot(self) -> dict:
+        """Returns the frame sent to the client after every move.
+
+        Returns:
+            The game snapshot (see ``Game.snapshot``) plus
+            ``"type": "snapshot"``.
+        """
         snapshot = self.game.snapshot()
-        return snapshot | {"game_id": self.id}
+        return snapshot | {"type": "snapshot"}
+
+    def init_message(self) -> dict:
+        """Returns the first frame sent to a client on attach and reset.
+
+        Returns:
+            The game snapshot (see ``Game.snapshot``) plus
+            ``"type": "init_message"`` and the runner's ``game_id``.
+        """
+        snapshot = self.game.snapshot()
+        return snapshot | {"type": "init_message", "game_id": self.id}
 
     def end_message(self):
         """Returns the frame sent when the game ends.
 
         Returns:
-            A dict with ``reason`` (``"collision"`` or ``"won_game"``),
+            A dict with ``"type": "end_message"``, ``reason`` (the game
+            state, i.e. ``"game_won"``, ``"collision"`` or
+            ``"direction_reversal"``, see ``SnakeEnv.get_game_state``),
             ``score``, ``step_count``, ``snake_length`` and ``won``.
         """
         snapshot = self.game.snapshot()
-        reason = "collision" if snapshot["lost"] else "won_game"
         return {
-            "reason": reason,
+            "type": "end_message",
+            "reason": snapshot["game_state"],
             "score": snapshot["score"],
             "step_count": snapshot["step_count"],
             "snake_length": len(snapshot["snake"]),

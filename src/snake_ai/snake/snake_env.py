@@ -78,6 +78,29 @@ class SnakeEnv:
         tile_count = TILE_COUNT * TILE_COUNT
         return len(self.snake_position) == tile_count
 
+    def get_game_state(self):
+        """Returns whether the game is still running and, if not, why it ended.
+
+        A game lost by reversing direction is told apart from a collision
+        because the snake doesn't move on a reversal, so its head is not on
+        its body.
+
+        Returns:
+            ``"game_won"`` if the game is won, ``"collision"`` if the snake
+            ran into itself, ``"direction_reversal"`` if it was lost by
+            reversing direction, or ``"pending"`` while it is still running.
+
+        Raises:
+            ValueError: If the game is marked as both won and lost.
+        """
+        if self.won:
+            return "game_won"
+        elif self.is_snake_collision():
+            return "collision"
+        elif self.lost:
+            return "direction_reversal"
+        return "pending"
+
     def handle_collision(self) -> bool:
         """Grows the snake after eating and places new food.
 

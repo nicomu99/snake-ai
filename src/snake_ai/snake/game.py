@@ -119,7 +119,8 @@ class Game:
 
         Returns:
             A dict with ``snake`` (a list of ``[x, y]`` positions, head
-            first), ``food`` (``[x, y]``), ``score``, ``lost``, ``won`` and
+            first), ``food`` (``[x, y]``), ``score``, ``lost``, ``won``,
+            ``game_state`` (see ``SnakeEnv.get_game_state``) and
             ``step_count``.
         """
         return {
@@ -128,6 +129,7 @@ class Game:
             "score": self.snake_env.score,
             "lost": self.snake_env.lost,
             "won": self.snake_env.won,
+            "game_state": self.snake_env.get_game_state(),
             "step_count": self.step_count,
         }
 
