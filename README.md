@@ -44,7 +44,8 @@ Within each category, bugs come first, then unfinished features, then cleanup.
 
 ### Game & environment
 
-- [ ] 🟡 Finish persistence: `Game.from_dict` is an unimplemented instance method (it should be a `classmethod`), and `to_dict` leaves out `direction`. Without it a restored game can't enforce the "no reversing" rule.
+- [x] 🟡 Support seeding: `SnakeEnv` uses the global `random` module. Give each env its own `random.Random(seed)` so the `reset{seed}` command can work and games can be reproduced.
+- [x] 🟡 Finish persistence: `Game.from_dict` is an unimplemented instance method (it should be a `classmethod`), and `to_dict` leaves out `direction`. Without it a restored game can't enforce the "no reversing" rule.
 
 ### WebSocket server
 

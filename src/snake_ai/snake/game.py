@@ -5,9 +5,10 @@ Attributes:
         The order must match the outputs of ``PolicyModel``.
 """
 
+import copy
 import logging
 
-from snake_ai.ai import DQNTrainer, Policy
+from snake_ai.ai import Policy
 
 from .snake_env import SnakeEnv
 
@@ -145,11 +146,61 @@ class Game:
         for listener in self._listeners:
             listener(snapshot)
 
-    def to_dict(self):
-        """Returns the game as a dict for persistence (same as ``snapshot``)."""
-        return self.snapshot()
+    def to_dict(self) -> dict:
+        """Returns the game as a JSON-serializable dict for persistence.
 
-    def from_dict(self, agent: DQNTrainer):
-        """Restores a game from ``to_dict`` output. Not implemented yet."""
-        # todo
-        pass
+        The dict holds everything ``from_dict`` needs to continue the game
+        exactly, including the food placement. All values are copies, so
+        later moves don't change the dict.
+
+        Returns:
+            The keys of ``snapshot``, plus ``direction`` (the last move's
+            direction, or ``None`` before the first move),
+            ``last_snake_position`` (the tail position before the last move)
+            and ``rng_state`` (``SnakeEnv.rng.getstate()`` as a list).
+        """
+        game_state = self.snapshot()
+        game_state["direction"] = self.snake_env.direction
+        game_state["last_snake_position"] = list(self.snake_env.last_snake_position)
+
+        version, internal, gauss = self.snake_env.rng.getstate()
+        game_state["rng_state"] = [version, list(internal), gauss]
+
+        return game_state
+
+    @classmethod
+    def from_dict(cls, game_state: dict, policy: Policy) -> "Game":
+        """Restores a game from a dict made by ``to_dict``.
+
+        The dict may have gone through JSON. Its values are copied, so the
+        dict and the restored game don't share lists. ``game_finished`` is
+        derived from ``lost`` and ``won``, and the ``game_state`` key is
+        ignored. Listeners are not restored, so callers have to subscribe
+        again.
+
+        Args:
+            game_state: A dict returned by ``to_dict``.
+            policy: The policy that picks moves in the restored game.
+
+        Returns:
+            A new ``Game`` that continues where the saved one stopped,
+            including the food placement.
+
+        Raises:
+            KeyError: If a key written by ``to_dict`` is missing.
+        """
+        game = cls(policy)
+        game.step_count = game_state["step_count"]
+        game.snake_env.snake_position = copy.deepcopy(game_state["snake"])
+        game.snake_env.last_snake_position = copy.deepcopy(
+            game_state["last_snake_position"])
+        game.snake_env.direction = game_state["direction"]
+        game.snake_env.lost = game_state["lost"]
+        game.snake_env.won = game_state["won"]
+        game.game_finished = game_state["lost"] or game_state["won"]
+        game.snake_env.score = game_state["score"]
+        game.snake_env.price_position = copy.deepcopy(game_state["food"])
+
+        version, internal, gauss = game_state["rng_state"]
+        game.snake_env.rng.setstate(version, tuple(internal), gauss)
+        return game
