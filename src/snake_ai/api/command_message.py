@@ -33,7 +33,7 @@ class Reset(BaseModel):
     """Pauses the game and starts a new one.
 
     Attributes:
-        seed: The random seed for the new game. Not used yet.
+        seed: The random seed for the new game.
     """
 
     type: Literal["reset"]

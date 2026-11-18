@@ -126,15 +126,15 @@ class GameRunner:
         """Stops the loop from making moves after the current tick."""
         self.running.clear()
 
-    async def reset(self, _seed: int | None = None):
+    async def reset(self, seed: int | None = None):
         """Pauses, starts a new game and sends the init message again.
 
         Args:
-            _seed: The random seed for the new game. Not used yet.
+            seed: The random seed for the new game. If None, the current random number
+                generator keeps going without being reseeded. Defaults to None.
         """
-        # TODO: what to do with seed
         self.pause()
-        self.game.reset()
+        self.game.reset(seed)
         await self.send_frame(self.init_message())
 
     def set_model(self, model_id: str):

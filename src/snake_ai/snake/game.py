@@ -55,15 +55,19 @@ class Game:
         """
         self._listeners.append(listener)
 
-    def reset(self):
+    def reset(self, seed: int | None = None):
         """Starts a new game, resets the step counter and notifies listeners.
+
+        Args:
+            seed: The random seed for the new game. If None, the current random number
+                generator keeps going without being reseeded. Defaults to None.
 
         Returns:
             The plain state of the new game, see ``SnakeEnv.get_state``.
         """
         self.game_finished = False
         self.step_count = 0
-        state = self.snake_env.reset()
+        state = self.snake_env.reset(seed)
         self._notify()
         return state
 

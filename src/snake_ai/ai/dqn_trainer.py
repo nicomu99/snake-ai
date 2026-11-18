@@ -2,10 +2,10 @@
 
 import copy
 import logging
-import random
 from collections import deque
 from datetime import datetime
 from pathlib import Path
+from random import Random
 
 import torch
 from torch.nn import MSELoss
@@ -32,6 +32,7 @@ class DQNTrainer:
     ``Policy.load_model`` and ``Policy.act`` directly.
 
     Attributes:
+        rng: A random number generator for choosing random actions during training.
         policy: The policy that is trained and used to pick actions. It is
             updated in place.
         target_model: A frozen, periodically synced copy of ``policy`` used
@@ -55,15 +56,18 @@ class DQNTrainer:
         device: The device of ``policy``.
     """
 
-    def __init__(self, policy: Policy):
+    def __init__(self, policy: Policy, seed: int = 11):
         """Sets up the target network, optimizer and training hyperparameters.
 
         Args:
             policy: The policy to train. It can be freshly initialized or
                 already loaded with weights to continue training. The target
                 network starts as a copy of it.
+            seed: Random number generator seed. Defaults to 11.
         """
         logger.info("Initializing agent")
+
+        self.rng = Random(seed)
 
         self.policy = policy
         self.target_model = copy.deepcopy(self.policy)
@@ -135,8 +139,8 @@ class DQNTrainer:
             A ``(reward, new_state, action, done)`` tuple, where ``new_state``
             is already encoded.
         """
-        if random.uniform(0, 1) < self.epsilon:
-            action = random.randint(0, 3)
+        if self.rng.uniform(0, 1) < self.epsilon:
+            action = self.rng.randint(0, 3)
         else:
             action = self.policy.get_move(state)
 
@@ -198,13 +202,13 @@ class DQNTrainer:
         The oldest transition is dropped once the buffer is full.
 
         Args:
-            state: The encoded state before the action, shape ``(N, N, 3)``.
+            state: The encoded state before the action, shape ``(N, N, 7)``.
             action: The action index that was taken.
             reward: The reward received for the action.
             next_state: The encoded state after the action.
             done: Whether the episode ended with this action.
         """
-        # state is a (n, n, 3) tensor; same as next_state
+        # state is a (n, n, 7) tensor; same as next_state
         # action is a single int
         # reward is a single int
         # done is boolean

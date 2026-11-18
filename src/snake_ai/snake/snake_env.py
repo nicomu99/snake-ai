@@ -2,7 +2,7 @@
 
 import copy
 import logging
-import random
+from random import Random
 
 from snake_ai.utils import TILE_COUNT
 
@@ -20,7 +20,12 @@ class SnakeEnv:
     The game is lost when the snake runs into itself or reverses its
     direction, and won when the snake fills the whole board.
 
+    Args:
+        seed: The seed for ``rng``. If None, it is seeded from the operating
+            system, so every env places food differently. Defaults to None.
+
     Attributes:
+        rng: A random number generator for generating food positions.
         snake_position: The snake's tiles as ``[x, y]`` lists, head first.
         last_snake_position: The tail position before the last move. The
             snake grows into it after eating.
@@ -32,7 +37,9 @@ class SnakeEnv:
         price_position: The food's ``[x, y]`` position.
     """
 
-    def __init__(self):
+    def __init__(self, seed: int | None = None):
+        self.rng = Random(seed)
+
         self.snake_position = None
         self.last_snake_position = None
         self.direction = None
@@ -43,12 +50,19 @@ class SnakeEnv:
 
         self.reset()
 
-    def reset(self):
+    def reset(self, seed: int | None = None):
         """Starts a new game with a one-tile snake and new food.
+
+        Args:
+            seed: Seed for random number generator. If None, the current random number
+                generator keeps going without being reseeded. Defaults to None.
 
         Returns:
             The plain state of the new game, see ``get_state``.
         """
+        if seed is not None:
+            self.rng = Random(seed)
+
         self.snake_position = [[0, 0]]
         self.last_snake_position = self.snake_position[0]
         self.direction = None
@@ -122,11 +136,11 @@ class SnakeEnv:
 
     def _generate_price(self):
         """Places the food on a random tile that the snake doesn't cover."""
-        new_pricex = random.randint(0, TILE_COUNT - 1)
-        new_pricey = random.randint(0, TILE_COUNT - 1)
+        new_pricex = self.rng.randint(0, TILE_COUNT - 1)
+        new_pricey = self.rng.randint(0, TILE_COUNT - 1)
         while [new_pricex, new_pricey] in self.snake_position:
-            new_pricex = random.randint(0, TILE_COUNT - 1)
-            new_pricey = random.randint(0, TILE_COUNT - 1)
+            new_pricex = self.rng.randint(0, TILE_COUNT - 1)
+            new_pricey = self.rng.randint(0, TILE_COUNT - 1)
         self.price_position = [new_pricex, new_pricey]
 
     def get_state(self) -> tuple[list[list[int]], list[int], str | None]:

@@ -16,6 +16,7 @@ uv run ruff check --fix src                          # lint + autofix (incl. imp
 uv run python -m snake_ai.local_main                 # local Tk GUI, plays with policy_models/model.pt
 uv run python -m snake_ai.local_main --model FILE    # play with another model (name in the model dir, or absolute path)
 uv run python -m snake_ai.local_main --train         # train a new policy, save it, then play
+uv run python -m snake_ai.local_main --seed N        # seed torch, food placement and training (default 42)
 ```
 
 - There is no `[project.scripts]` entry; run the commands above. The ASGI app object is `snake_ai.main:main_app` (`main()` only *builds* the app).
@@ -41,4 +42,4 @@ uv run python -m snake_ai.local_main --train         # train a new policy, save 
 ## Known incomplete / broken areas
 
 - If `agent_step` raises inside a `GameRunner` loop task, the task dies silently and the game freezes; the exception only surfaces on shutdown.
-- `set_model`, the reset `seed`, `Game.from_dict` and the Redis-backed registry methods (`save`/`delete`) are stubs/TODOs.
+- `set_model`, `Game.from_dict` and the Redis-backed registry methods (`save`/`delete`) are stubs/TODOs.

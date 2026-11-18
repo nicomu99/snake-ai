@@ -44,27 +44,16 @@ Within each category, bugs come first, then unfinished features, then cleanup.
 
 ### Game & environment
 
-- [ ] 🟡 Support seeding: `SnakeEnv` uses the global `random` module. Give each env its own `random.Random(seed)` so the `reset{seed}` command can work and games can be reproduced.
 - [ ] 🟡 Finish persistence: `Game.from_dict` is an unimplemented instance method (it should be a `classmethod`), and `to_dict` leaves out `direction`. Without it a restored game can't enforce the "no reversing" rule.
 
 ### WebSocket server
 
 - [ ] 🟢 Watch the runner's loop task: if `agent_step` raises, the task dies silently and the game just freezes. The exception only shows up when the task is awaited on shutdown. Add a done-callback that logs it (and maybe notifies the client).
-- [x] 🟢 The end message's `reason` is `"collision"` for every loss, including reversing direction. Report the actual reason.
-- [x] 🟡 Give every server message a `type` field. Snapshots, the init message and the end message have none (only errors do), so clients have to guess the message kind from its keys. This changes the protocol, so clients need updating too.
 - [ ] 🟡 Implement the `set_model` command (currently a stub). This needs a way to list and load the models in `policy_models/`, and an agent per model instead of one shared agent.
 - [ ] 🟡 `agent_step` runs the PyTorch inference synchronously on the event loop. With many games this blocks the loop and makes the ticks uneven. `asyncio.to_thread` is a medium fix. Batching inference across games is larger (🔴).
 - [ ] 🟡 Limit how many games can exist. Every connection without a known `game_id` creates a runner, and anyone who knows a `game_id` can take over that game. Consider a cap on runners and/or a secret token per game.
 - [ ] 🔴 Implement the Redis-backed registry: `save` and `delete` are stubs and the Redis code is commented out. Depends on `Game.from_dict` (see above).
 
-### Local GUI
+### Testing
 
-- [x] 🟢 Fix `local_main.py`: it calls `Game(SnakeEnv(), Agent())`, but `Game` now only takes `dqn_trainer.py`.
-- [x] 🟢 Fix `gui/controller.py`: it expects `step`/`agent_step` to return 3 values, but they now return 4 (`reward, state, lost, won`).
-
-### Project & tooling
-
-- [x] 🟢 Fix the `snake-ai` script in `pyproject.toml`: it points at `snake_ai.main:main`, which only builds the FastAPI app and doesn't start a server.
-- [x] 🟢 Remove the need to run from the repo root: the model is loaded from the relative path `policy_models/model.pt` and logs go to `./app.log`, so running from another directory fails to find the model and writes logs in the wrong place.
-- [x] 🟢 Make the logging setup configurable: the root level is hard-coded to `DEBUG` and the log file path to `app.log`. Read both from settings or environment variables.
 - [ ] 🟡 Add tests. There are none yet. Good first targets are `SnakeEnv` (moves, wrapping, eating, winning, losing), `parse_message`, and the `GameRunner` lifecycle (attach, detach, expire).
