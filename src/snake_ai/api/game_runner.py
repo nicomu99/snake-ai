@@ -22,6 +22,10 @@ class GameRunner:
     ``tick_ms``. When the game is lost or won, it sends an end message and
     pauses.
 
+    If a tick raises, the exception is logged and the loop keeps running: the
+    runner pauses, is marked as ``crashed`` and sends a crash message.
+    ``start`` and ``resume`` then do nothing until the client sends ``reset``.
+
     Only one sink can be attached at a time. Attaching a new one closes the
     old one. A runner without a sink pauses and is deleted by the sweeper
     after ``_DELETION_DELAY`` seconds.
@@ -42,6 +46,8 @@ class GameRunner:
         tick_ms: The delay between moves in milliseconds.
         detached_since: The ``time.monotonic()`` time the sink was detached,
             or None while a sink is attached.
+        crashed: Whether a tick raised an exception since the last reset. The
+            game may be half-updated, so it can't be continued.
     """
 
     _DELETION_DELAY = 5     # seconds
@@ -52,22 +58,34 @@ class GameRunner:
         self.game = Game(self._policy)
         self.sink = None
 
-        self.running = asyncio.Event()
-        self.task = asyncio.create_task(self._loop())
         self.tick_ms: int = 16
         self.detached_since: float | None = None
+        self.crashed: bool = False
+        self.running = asyncio.Event()
+        self.task = asyncio.create_task(self._loop())
 
     async def _loop(self):
-        """Plays the game while ``running`` is set, until canceled."""
+        """Plays the game while ``running`` is set, until canceled.
+
+        An exception during a tick doesn't end the loop. It is logged, the
+        runner pauses, ``crashed`` is set and the crash message is sent.
+        """
         logger.info("Starting game session loop")
         while True:
             await self.running.wait()
-            self.game.agent_step()
-            snapshot = self.snapshot()
-            await self.send_frame(snapshot)
-            if self.game.snake_env.lost or self.game.snake_env.won:
-                await self.send_frame(self.end_message())
+            try:
+                self.game.agent_step()
+                snapshot = self.snapshot()
+                await self.send_frame(snapshot)
+                if self.game.snake_env.lost or self.game.snake_env.won:
+                    await self.send_frame(self.end_message())
+                    self.pause()
+            except Exception as e:
+                logger.exception("Game %s crashed", self.id, exc_info=e)
                 self.pause()
+                self.crashed = True
+                await self.send_frame(self.crash_message())
+                continue
             await asyncio.sleep(self.tick_ms / 1000)
 
     async def send_frame(self, message: dict):
@@ -112,14 +130,19 @@ class GameRunner:
     def start(self):
         """Starts the game.
 
-        If the game is lost or won, the function does nothing.
+        If the game is lost, won or crashed, the function does nothing.
         """
-        if self.game.snake_env.lost or self.game.snake_env.won:
+        if self.game.snake_env.lost or self.game.snake_env.won or self.crashed:
             return
         self.running.set()
 
     def resume(self):
-        """Lets the loop make moves."""
+        """Lets the loop make moves.
+
+        If the game crashed, the function does nothing.
+        """
+        if self.crashed:
+            return
         self.running.set()
 
     def pause(self):
@@ -129,12 +152,15 @@ class GameRunner:
     async def reset(self, seed: int | None = None):
         """Pauses, starts a new game and sends the init message again.
 
+        This also clears ``crashed``, so the new game can be started.
+
         Args:
             seed: The random seed for the new game. If None, the current random number
                 generator keeps going without being reseeded. Defaults to None.
         """
         self.pause()
         self.game.reset(seed)
+        self.crashed = False
         await self.send_frame(self.init_message())
 
     def set_model(self, model_id: str):
@@ -153,6 +179,9 @@ class GameRunner:
     async def attach(self, sink: WebSocketSink):
         """Attaches a sink, closes the previous one and sends the init message.
 
+        If the game has crashed, the crash message is sent after the init
+        message, so a reconnecting client knows it has to reset.
+
         Args:
             sink: The new client's sink.
         """
@@ -166,6 +195,8 @@ class GameRunner:
                 logging.exception(e)
 
         await self.sink.send_frame(self.init_message())
+        if self.crashed:
+            await self.sink.send_frame(self.crash_message())
 
     async def detach(self, sink: WebSocketSink):
         """Detaches a sink and pauses the game.
@@ -247,4 +278,20 @@ class GameRunner:
             "step_count": snapshot["step_count"],
             "snake_length": len(snapshot["snake"]),
             "won": snapshot["won"],
+        }
+
+    @staticmethod
+    def crash_message() -> dict:
+        """Returns the frame sent when a tick raised an exception.
+
+        It is sent when the crash happens and again on every attach until the
+        game is reset. The exception itself is only logged, not sent.
+
+        Returns:
+            A dict with ``"type": "game_crashed"`` and a ``message`` that
+            tells the user to reset the game.
+        """
+        return {
+            "type": "game_crashed",
+            "message": "Please reset game and try again.",
         }
