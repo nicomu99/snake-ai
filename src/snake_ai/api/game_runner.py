@@ -5,11 +5,11 @@ import logging
 import time
 import uuid
 
-from snake_ai.ai import Policy
+from snake_ai.ai import PolicySelector
+from snake_ai.api.command_message import Pause, Reset, Resume, SetModel, Speed, Start
+from snake_ai.api.errors import InvalidCommandError
+from snake_ai.api.web_socket_sink import WebSocketSink
 from snake_ai.snake import Game
-
-from .command_message import Pause, Reset, Resume, SetModel, Speed, Start
-from .web_socket_sink import WebSocketSink
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +34,9 @@ class GameRunner:
     the loop task.
 
     Args:
-        policy: The policy that plays the game. It is shared with the other
-            runners and only used for inference.
+        policy_selector: Provides the policies, which are shared with the
+            other runners and only used for inference. The game starts with
+            the default policy, and ``set_model`` switches to another one.
 
     Attributes:
         id: A random id of 12 hex characters.
@@ -52,10 +53,10 @@ class GameRunner:
 
     _DELETION_DELAY = 5     # seconds
 
-    def __init__(self, policy: Policy):
+    def __init__(self, policy_selector: PolicySelector):
         self.id = uuid.uuid4().hex[:12]
-        self._policy = policy
-        self.game = Game(self._policy)
+        self._policy_selector = policy_selector
+        self.game = Game(self._policy_selector.choose_default())
         self.sink = None
 
         self.tick_ms: int = 16
@@ -164,8 +165,30 @@ class GameRunner:
         await self.send_frame(self.init_message())
 
     def set_model(self, model_id: str):
-        """Switches the model that plays the game. Not implemented yet."""
-        # TODO
+        """Switches the model that plays the game and pauses it.
+
+        The game itself is kept, so the new model continues from the current
+        state. The client is not told about the pause yet.
+
+        Args:
+            model_id: The id of the new model, as listed in the catalog.
+
+        Raises:
+            InvalidCommandError: If no model with this id is available. The
+                game is then left unchanged.
+        """
+        try:
+            self.game.policy = self._policy_selector.select_policy(model_id)
+            self.pause()
+        except ValueError as e:
+            logger.warning(
+                "Invalid model id %s chosen for game %s",
+                model_id, self.id)
+            raise InvalidCommandError(
+                f"Invalid model id {model_id}. Must be one of "
+                f"{list(self._policy_selector.policies.keys())}") from e
+        # TODO: send confirmation message
+        # TODO: restart?
         pass
 
     def set_speed(self, tick_ms: int):
@@ -192,7 +215,7 @@ class GameRunner:
             try:
                 await old_sink.close()
             except RuntimeError as e:
-                logging.exception(e)
+                logger.exception(e)
 
         await self.sink.send_frame(self.init_message())
         if self.crashed:

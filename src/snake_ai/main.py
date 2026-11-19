@@ -1,7 +1,7 @@
 """Entry point for the Snake AI WebSocket server.
 
 Builds the FastAPI application, wires up the WebSocket router and manages
-the lifetime of the shared policy, the game runner registry and the sweeper
+the lifetime of the shared policy selector, the game runner registry and the sweeper
 that removes abandoned games.
 
 Example:
@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 # import redis.asyncio as redis
 from fastapi import FastAPI
 
-from snake_ai.ai import Policy
+from snake_ai.ai import PolicySelector
 from snake_ai.api import GameRunnerRegistry
 from snake_ai.api.game_runner_sweeper import GameRunnerSweeper
 from snake_ai.api.sockets import router
@@ -30,12 +30,13 @@ from snake_ai.utils import configure_logging, get_settings
 async def lifespan(app: FastAPI):
     """Sets up and tears down the shared server state.
 
-    On startup, loads ``model.pt`` from the model directory
-    (``Settings.model_path``) as a ``Policy`` that every game shares,
-    creates the game runner registry and starts the sweeper. The policy and
-    the registry are stored on ``app.state`` (``policy``,
-    ``runner_registry``). On shutdown, stops the sweeper and closes every
-    running game.
+    On startup, loads every model listed in the model catalog
+    (``Settings.model_catalog``) from the model directory
+    (``Settings.model_path``) into a ``PolicySelector`` that every game
+    shares, creates the game runner registry and starts the sweeper. The
+    selector and the registry are stored on ``app.state``
+    (``policy_selector``, ``runner_registry``). On shutdown, stops the
+    sweeper and closes every running game.
 
     Args:
         app: The FastAPI application whose state is populated.
@@ -44,16 +45,17 @@ async def lifespan(app: FastAPI):
         None. Control returns to FastAPI while the server is running.
 
     Raises:
-        FileNotFoundError: If ``model.pt`` does not exist in the model
-            directory. The server then fails to start.
+        FileNotFoundError: If the model catalog does not exist. The server
+            then fails to start. Listed models whose file is missing are
+            only skipped with a warning.
     """
     # redis_url = "redis://localhost:6379"      # TODO: url
     settings = get_settings()
-    policy = Policy.load_model("model.pt", model_path=settings.model_path)
-    app.state.policy = policy
     # app.state.redis = redis.Redis.from_url(redis_url, decode_responses=True)
-    app.state.runner_registry = GameRunnerRegistry(app.state.policy)
-    # , app.state.redis)
+    policy_selector = PolicySelector.from_path(
+        settings.model_catalog, settings.model_path)
+    app.state.policy_selector = policy_selector
+    app.state.runner_registry = GameRunnerRegistry(policy_selector)
     game_session_sweeper = GameRunnerSweeper(app.state.runner_registry)
     game_session_sweeper.start()
     try:

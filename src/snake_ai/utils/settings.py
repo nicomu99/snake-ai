@@ -21,7 +21,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -43,27 +43,52 @@ class Settings(BaseSettings):
         model_path: The directory that models are loaded from and trained
             models are saved to. Defaults to ``policy_models`` in the
             repository root.
+        model_catalog: The JSON file that lists the models the server
+            offers (see ``ai.PolicySelector``). Defaults to ``models.json``
+            in ``model_path``, also when ``model_path`` comes from the
+            environment.
     """
 
     model_config = SettingsConfigDict(env_prefix="SNAKE_AI_")
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     log_path: Path = PROJECT_ROOT / "logs/app.log"
-    model_path: Path = PROJECT_ROOT / "policy_models"
 
-    @field_validator("log_path", "model_path")
+    model_path: Path = PROJECT_ROOT / "policy_models"
+    model_catalog: Path | None = None  # None defaults to model_path / "models.json"
+
+    @field_validator("log_path", "model_path", "model_catalog")
     @classmethod
-    def _make_absolute(cls, path: Path) -> Path:
+    def _make_absolute(cls, path: Path | None) -> Path | None:
         """Expands ``~`` and resolves the path to an absolute one.
 
+        ``BaseSettings`` also validates defaults, so this runs for every
+        field it is registered for, even when nothing is configured.
+
         Args:
-            path: The configured path.
+            path: The configured path, or None if the field is unset.
 
         Returns:
-            The absolute path. Relative paths are resolved against the
-            current working directory.
+            The absolute path, or None if ``path`` is None. Relative paths
+            are resolved against the current working directory.
         """
+        if path is None:
+            return None
         return path.expanduser().resolve()
+
+    @model_validator(mode="after")
+    def check_catalog_path(self):
+        """Defaults ``model_catalog`` to ``models.json`` in ``model_path``.
+
+        This runs after all fields are set, so ``model_path`` already holds
+        the value from the environment, if there is one.
+
+        Returns:
+            The settings, with ``model_catalog`` set.
+        """
+        if self.model_catalog is None:
+            self.model_catalog = self.model_path / "models.json"
+        return self
 
 
 @lru_cache

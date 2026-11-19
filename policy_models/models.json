@@ -1,0 +1,18 @@
+{
+  "models": [
+    {
+      "id": "dqn-200k",
+      "name": "DQN, 200k steps",
+      "uri": "dqn-200k.pt",
+      "tile_count": 5,
+      "in_channels": 7
+    },
+    {
+      "id": "dqn-1m",
+      "name": "DQN, 1M steps",
+      "uri": "dqn-1m.pt",
+      "tile_count": 5,
+      "in_channels": 7
+    }
+  ]
+}

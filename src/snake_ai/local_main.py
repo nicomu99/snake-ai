@@ -4,7 +4,7 @@ Models are loaded from and saved to the model directory from the settings
 (``SNAKE_AI_MODEL_PATH``, by default ``policy_models/`` in the repository
 root), so this works from any working directory::
 
-    uv run python -m snake_ai.local_main                  # play with model.pt
+    uv run python -m snake_ai.local_main                  # play with dqn-1m.pt
     uv run python -m snake_ai.local_main --model FILE     # play with FILE
     uv run python -m snake_ai.local_main --train          # train, then play
     uv run python -m snake_ai.local_main --seed N         # use seed N (default 42)
@@ -76,7 +76,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--model",
         type=str,
-        default="model.pt",
+        default="dqn-1m.pt",
         metavar="FILE",
         help=(
             "Model file in the model directory, or an absolute path "

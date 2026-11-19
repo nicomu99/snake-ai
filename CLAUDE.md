@@ -13,14 +13,14 @@ uv sync                                              # install deps (incl. dev g
 uv run uvicorn snake_ai.main:main_app --reload       # run the WebSocket server
 uv run ruff check src                                # lint (rules E, F, I, B, W; line length 88)
 uv run ruff check --fix src                          # lint + autofix (incl. import sorting)
-uv run python -m snake_ai.local_main                 # local Tk GUI, plays with policy_models/model.pt
+uv run python -m snake_ai.local_main                 # local Tk GUI, plays with policy_models/dqn-1m.pt
 uv run python -m snake_ai.local_main --model FILE    # play with another model (name in the model dir, or absolute path)
 uv run python -m snake_ai.local_main --train         # train a new policy, save it, then play
 uv run python -m snake_ai.local_main --seed N        # seed torch, food placement and training (default 42)
 ```
 
 - There is no `[project.scripts]` entry; run the commands above. The ASGI app object is `snake_ai.main:main_app` (`main()` only *builds* the app).
-- Settings come from `SNAKE_AI_*` environment variables (`utils/settings.py`, pydantic-settings, read via the cached `get_settings()`): `SNAKE_AI_LOG_LEVEL` (default `INFO`, must be upper case), `SNAKE_AI_LOG_PATH` (default `<repo>/logs/app.log`), `SNAKE_AI_MODEL_PATH` (model directory, default `<repo>/policy_models`). Defaults are anchored to the repo root via `PROJECT_ROOT` (derived from `__file__`, so only valid for a checkout / editable install); relative env values are resolved against the cwd. Commands therefore work from any directory.
+- Settings come from `SNAKE_AI_*` environment variables (`utils/settings.py`, pydantic-settings, read via the cached `get_settings()`): `SNAKE_AI_LOG_LEVEL` (default `INFO`, must be upper case), `SNAKE_AI_LOG_PATH` (default `<repo>/logs/app.log`), `SNAKE_AI_MODEL_PATH` (model directory, default `<repo>/policy_models`), `SNAKE_AI_MODEL_CATALOG` (model catalog JSON, default `<model_path>/models.json`, computed after the env is read so it follows `SNAKE_AI_MODEL_PATH`). Defaults are anchored to the repo root via `PROJECT_ROOT` (derived from `__file__`, so only valid for a checkout / editable install); relative env values are resolved against the cwd. Commands therefore work from any directory.
 
 ## Architecture
 
@@ -33,7 +33,7 @@ uv run python -m snake_ai.local_main --seed N        # seed torch, food placemen
 - `ai/` takes paths as arguments and does not read settings; the entry points (`local_main.py`, `main.py`) call `get_settings()` and pass paths down.
 - `ai/policy_model.py` — a CNN whose `Linear(192, …)` input size is hard-coded for a 5×5 board. **Changing `TILE_COUNT` or the number of input channels breaks the model and makes the saved `.pt` files incompatible.**
 
-**Server (`api/`)** — the `lifespan` in `main.py` loads `model.pt` from the model directory as one `Policy` (inference only, no `DQNTrainer`), stores it on `app.state.policy` and shares it with every game via `GameRunnerRegistry` → `GameRunner` → `Game`:
+**Server (`api/`)** — the `lifespan` in `main.py` builds one `ai.PolicySelector` via `from_path(model_catalog, model_path)`: it loads every model listed in `models.json` (entries are `ai.ModelEntry`: `id`, `name`, `uri` relative to the model dir, `tile_count`, `in_channels`; missing files are skipped with a warning) as one shared `Policy` per model (inference only, no `DQNTrainer`). The selector is stored on `app.state.policy_selector` and passed `GameRunnerRegistry` → `GameRunner`; each runner starts with `choose_default()` (hard-coded `dqn-200k` for now) and `set_model` swaps `Game.policy`:
 - `sockets.py` — the single endpoint `WS /ws/play?game_id=…`. Incoming JSON is parsed by `command_message.parse_message` into a pydantic discriminated union on `type`: `start`, `pause`, `resume`, `reset{seed?}`, `speed{tick_ms 1..1000}`, `set_model{model_id}`. Invalid input gets `{"type":"error","message":…}` back.
 - `GameRunnerRegistry` — maps ids to `GameRunner`s (keys are `game_runner:<id>`). Connecting without a `game_id`, or with an unknown one, creates a new runner. Connecting with a known id re-attaches to that runner. The commented-out Redis code shows a planned persistence backend.
 - `GameRunner` — owns one `Game` and an asyncio loop task. The loop waits on the `running` Event, then each tick calls `agent_step`, sends the snapshot to the attached `WebSocketSink`, and sleeps for `tick_ms`. It pauses and sends an end message when the game is lost or won. If a tick raises, the loop survives: the exception is logged, the runner pauses, sets `crashed` and sends `{"type":"game_crashed",…}` (also on every attach until reset); `start`/`resume` are ignored until a `reset`. Only one sink can be attached at a time: a new attach closes the old socket with code 4000 ("opened in another tab"). The first frame sent on attach/reset is the snapshot plus `game_id` (`init_message()`).
@@ -41,4 +41,4 @@ uv run python -m snake_ai.local_main --seed N        # seed torch, food placemen
 
 ## Known incomplete / broken areas
 
-- `set_model` and the Redis-backed registry methods (`save`/`delete`) are stubs/TODOs. `Game.to_dict`/`from_dict` (incl. the food RNG state) are ready for the Redis backend.
+- `set_model` works but pauses the game without telling the client (see the README todo). The Redis-backed registry methods (`save`/`delete`) are stubs/TODOs. `Game.to_dict`/`from_dict` (incl. the food RNG state) are ready for the Redis backend.

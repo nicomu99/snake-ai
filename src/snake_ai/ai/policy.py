@@ -82,8 +82,8 @@ class Policy(nn.Module):
         """Computes the Q-values for one encoded state or a batch of them.
 
         Args:
-            x: An encoded state of shape ``(N, N, 3)`` or a batch of shape
-                ``(B, N, N, 3)``, on ``device``.
+            x: An encoded state of shape ``(N, N, 7)`` or a batch of shape
+                ``(B, N, N, 7)``, on ``device``.
 
         Returns:
             A tensor of shape ``(B, 4)`` with one Q-value per action.
