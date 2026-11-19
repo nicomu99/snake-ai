@@ -22,17 +22,23 @@ class GameRunnerRegistry:
     Args:
         policy_selector: The shared selector that every new runner gets, so
             it can pick its model.
+        max_game_count: The maximum number of runners. When a new runner
+            exceeds it, the oldest one is evicted.
     """
 
-    def __init__(self, policy_selector: PolicySelector):  # , r: redis.Redis):
+    def __init__(self, policy_selector: PolicySelector, max_game_count: int):
+        # , r: redis.Redis):
         # self._r = r
         self._policy_selector = policy_selector
         self._runners: dict[str, GameRunner] = {}
+        self._max_game_count = max_game_count
 
     async def attach(self, sink: WebSocketSink, game_runner_id: str | None):
         """Attaches a sink to an existing game, or to a new one.
 
-        A new game is created if ``game_runner_id`` is None or unknown.
+        A new game is created if ``game_runner_id`` is None or unknown. If
+        that exceeds the maximum number of games, the oldest game is
+        evicted (see ``enforce_max_game_count``).
 
         Args:
             sink: The client's sink.
@@ -45,6 +51,7 @@ class GameRunnerRegistry:
         if game_runner_id is None or not self.check_key(game_runner_id):
             runner = GameRunner(self._policy_selector)
             await self.add(runner)
+            await self.enforce_max_game_count()
         else:
             runner = await self.get(game_runner_id)
         await runner.attach(sink)
@@ -73,6 +80,20 @@ class GameRunnerRegistry:
             logger.info("Deleting game session %s", runner_id)
             game_runner.cancel()
             del self._runners[runner_id]
+
+    async def enforce_max_game_count(self):
+        """Evicts the oldest runner if there are more than the maximum.
+
+        Runners are ordered by when they were added, so the oldest one is
+        removed even if its client is still connected (see
+        ``GameRunner.evict``). Removes at most one runner, so call it after
+        every ``add``.
+        """
+        if len(self._runners) <= self._max_game_count:
+            return
+        delete_id = next(iter(self._runners))
+        await self._runners[delete_id].evict()
+        del self._runners[delete_id]
 
     async def close_all(self):
         """Stops every runner and clears the registry. Used on shutdown."""

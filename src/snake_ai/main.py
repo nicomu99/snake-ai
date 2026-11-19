@@ -59,7 +59,8 @@ async def lifespan(app: FastAPI):
     policy_selector = PolicySelector.from_path(
         model_catalog, settings.model_path)
     app.state.policy_selector = policy_selector
-    app.state.runner_registry = GameRunnerRegistry(policy_selector)
+    app.state.runner_registry = GameRunnerRegistry(
+        policy_selector, settings.max_game_count)
     game_session_sweeper = GameRunnerSweeper(app.state.runner_registry)
     game_session_sweeper.start()
     try:

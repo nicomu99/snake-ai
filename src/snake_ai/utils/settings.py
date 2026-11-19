@@ -21,7 +21,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -47,6 +47,9 @@ class Settings(BaseSettings):
             offers (see ``ai.PolicySelector``). Defaults to ``models.json``
             in ``model_path``, also when ``model_path`` comes from the
             environment.
+        max_game_count: The maximum number of games the server keeps. When
+            a new game exceeds it, the oldest game is evicted. Must be at
+            least 1. Defaults to 50.
     """
 
     model_config = SettingsConfigDict(env_prefix="SNAKE_AI_")
@@ -56,6 +59,8 @@ class Settings(BaseSettings):
 
     model_path: Path = PROJECT_ROOT / "policy_models"
     model_catalog: Path | None = None  # None defaults to model_path / "models.json"
+
+    max_game_count: int = Field(default=50, ge=1)
 
     @field_validator("log_path", "model_path", "model_catalog")
     @classmethod

@@ -17,12 +17,16 @@ class WebSocketSink:
     def __init__(self, web_socket: WebSocket):
         self.ws = web_socket
 
-    async def close(self):
-        """Closes the socket because the game was opened somewhere else.
+    async def close(self, code: int = 4000, reason: str = "opened in another tab"):
+        """Closes the socket with a WebSocket close code and reason.
 
-        Uses close code 4000 with the reason "opened in another tab".
+        The defaults are for a game that was opened somewhere else.
+
+        Args:
+            code: The close code. Defaults to 4000.
+            reason: The close reason. Defaults to "opened in another tab".
         """
-        await self.ws.close(code=4000, reason="opened in another tab")
+        await self.ws.close(code=code, reason=reason)
 
     async def send_frame(self, message):
         """Sends a message to the client as JSON.

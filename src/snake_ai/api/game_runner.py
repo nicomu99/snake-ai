@@ -58,7 +58,7 @@ class GameRunner:
         self._policy_selector = policy_selector
         self.game = Game(self._policy_selector.choose_default())
         self.curr_model_id = self._policy_selector.default_model_id
-        self.sink = None
+        self.sink: WebSocketSink | None = None
 
         self.tick_ms: int = 16
         self.detached_since: float | None = None
@@ -218,9 +218,10 @@ class GameRunner:
             except RuntimeError as e:
                 logger.exception(e)
 
-        await self.sink.send_frame(self.init_message())
-        if self.crashed:
-            await self.sink.send_frame(self.crash_message())
+        if self.sink is not None:
+            await self.sink.send_frame(self.init_message())
+            if self.crashed:
+                await self.sink.send_frame(self.crash_message())
 
     async def detach(self, sink: WebSocketSink):
         """Detaches a sink and pauses the game.
@@ -264,6 +265,22 @@ class GameRunner:
             await self.task
         except asyncio.CancelledError:
             logger.info("Game session %s stopped", self.id)
+
+    async def evict(self):
+        """Stops the game to make room for a new one and disconnects the client.
+
+        Cancels the loop task and waits for it (see ``aclose``), sends the
+        cancel message and closes the attached socket with code 4001 and the
+        reason "too many games". Without an attached sink, only the task is
+        stopped. Used by ``GameRunnerRegistry.enforce_max_game_count``.
+        """
+        await self.aclose()
+        await self.send_frame(self.cancel_message())
+        if self.sink is not None:
+            try:
+                await self.sink.close(code=4001, reason="too many games")
+            except RuntimeError as e:
+                logger.exception(e)
 
     def snapshot(self) -> dict:
         """Returns the frame sent to the client after every move.
@@ -338,4 +355,19 @@ class GameRunner:
         return {
             "type": "game_crashed",
             "message": "Please reset game and try again.",
+        }
+
+    @staticmethod
+    def cancel_message() -> dict:
+        """Returns the frame sent when the game is evicted.
+
+        It is sent right before the socket is closed, see ``evict``.
+
+        Returns:
+            A dict with ``"type": "game_canceled"`` and a ``message`` that
+            says the session will be closed.
+        """
+        return {
+            "type": "game_canceled",
+            "message": "Game has been canceled. The session will be closed."
         }

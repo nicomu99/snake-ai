@@ -38,7 +38,9 @@ async def play(
     gets ``{"type": "error", "message": ...}`` back.
 
     When the client disconnects, the game is paused and detached. The
-    sweeper deletes it if nobody reconnects in time.
+    sweeper deletes it if nobody reconnects in time. If there are too many
+    games, the oldest one is evicted: its client gets a ``game_canceled``
+    message and the socket is closed with code 4001.
 
     Args:
         ws: The client's WebSocket connection.
