@@ -20,6 +20,33 @@ Run local GUI
 uv run python -m snake_ai.local_main
 ```
 
+Run the web frontend
+
+The frontend lives in `frontend/` (Vite + React + TypeScript) and needs Node.js with npm. Install its dependencies once:
+
+```bash
+cd frontend
+npm install
+```
+
+Then start the websocket server (see above) in one terminal and the frontend dev server in a second one:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open http://localhost:5173. The dev server forwards `/ws` to the websocket server on port 8000, so both have to be running. Code changes reload automatically.
+
+Other frontend commands (run them in `frontend/`):
+
+```bash
+npm run build    # type-check and bundle into frontend/dist/
+npm run lint     # lint with oxlint
+```
+
+More details are in [frontend/README.md](frontend/README.md).
+
 Run test client
 
 ```bash
@@ -45,6 +72,7 @@ Within each category, bugs come first, then unfinished features, then cleanup.
 ### WebSocket server
 
 - [ ] 🟡 `agent_step` runs the PyTorch inference synchronously on the event loop. With many games this blocks the loop and makes the ticks uneven. `asyncio.to_thread` is a medium fix. Batching inference across games is larger (🔴).
+- [ ] 🟢 Add a `GET /models` endpoint that returns the model catalog (`id` and `name` of each loaded model, plus the `default_model` id), so the frontend can fill its model picker instead of hard-coding the ids.
 - [ ] 🔴 Implement the Redis-backed registry: `save` and `delete` are stubs and the Redis code is commented out. Depends on `Game.from_dict` (see above).
 
 ### Testing
