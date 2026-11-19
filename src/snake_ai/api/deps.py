@@ -2,7 +2,7 @@
 
 from fastapi.requests import HTTPConnection
 
-from .game_runner_registry import GameRunnerRegistry
+from snake_ai.api.game_runner_registry import GameRunnerRegistry
 
 
 def get_registry(request: HTTPConnection) -> GameRunnerRegistry:

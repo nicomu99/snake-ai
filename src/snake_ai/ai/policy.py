@@ -6,9 +6,8 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
+from snake_ai.ai.policy_model import PolicyModel
 from snake_ai.utils import TILE_COUNT
-
-from .policy_model import PolicyModel
 
 logger = logging.getLogger(__name__)
 

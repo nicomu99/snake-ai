@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from .errors import InvalidCommandError
+from snake_ai.api.errors import InvalidCommandError
 
 
 class Start(BaseModel):

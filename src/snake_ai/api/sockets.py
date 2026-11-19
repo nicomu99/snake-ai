@@ -5,11 +5,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket
 
-from .command_message import parse_message
-from .deps import get_registry
-from .errors import InvalidCommandError
-from .game_runner_registry import GameRunnerRegistry
-from .web_socket_sink import WebSocketSink
+from snake_ai.api.command_message import parse_message
+from snake_ai.api.deps import get_registry
+from snake_ai.api.errors import InvalidCommandError
+from snake_ai.api.game_runner_registry import GameRunnerRegistry
+from snake_ai.api.web_socket_sink import WebSocketSink
 
 router = APIRouter()
 

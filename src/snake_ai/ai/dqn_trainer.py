@@ -13,7 +13,7 @@ from torch.optim import Adam
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from .policy import Policy
+from snake_ai.ai.policy import Policy
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class DQNTrainer:
         self.epsilon_min = 0.1
         self.gamma = 0.95
 
-        self.train_steps = 200_000
+        self.train_steps = 1_000_000
         self.learning_starts = 10_000
 
         # Variables for updating the target model periodically

@@ -8,7 +8,7 @@ backups. ``urllib3`` is limited to ``WARNING`` because it is noisy.
 
 import logging.config
 
-from .settings import get_settings
+from snake_ai.utils.settings import get_settings
 
 
 def configure_logging():

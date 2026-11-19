@@ -2,9 +2,8 @@
 
 import logging
 
+from snake_ai.gui.view import View
 from snake_ai.snake import Game
-
-from .view import View
 
 logger = logging.getLogger(__name__)
 
