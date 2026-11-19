@@ -31,7 +31,9 @@ async def play(
 
     After that, the server sends a ``snapshot`` message (see
     ``GameRunner.snapshot``) after every move, and an ``end_message`` (see
-    ``GameRunner.end_message``) when the game is lost or won. The client
+    ``GameRunner.end_message``) when the game is lost or won, and a
+    ``model_changed`` message (see ``GameRunner.model_update_message``)
+    after a ``set_model`` command. The client
     sends commands as JSON objects (see ``command_message``). Invalid input
     gets ``{"type": "error", "message": ...}`` back.
 

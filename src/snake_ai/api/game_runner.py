@@ -57,6 +57,7 @@ class GameRunner:
         self.id = uuid.uuid4().hex[:12]
         self._policy_selector = policy_selector
         self.game = Game(self._policy_selector.choose_default())
+        self.curr_model_id = self._policy_selector.default_model_id
         self.sink = None
 
         self.tick_ms: int = 16
@@ -122,7 +123,7 @@ class GameRunner:
             case Resume():
                 self.resume()
             case SetModel():
-                self.set_model(command.model_id)
+                await self.set_model(command.model_id)
             case Speed():
                 self.set_speed(command.tick_ms)
             case Start():
@@ -164,11 +165,12 @@ class GameRunner:
         self.crashed = False
         await self.send_frame(self.init_message())
 
-    def set_model(self, model_id: str):
-        """Switches the model that plays the game and pauses it.
+    async def set_model(self, model_id: str):
+        """Switches the model that plays the game and resets the game.
 
-        The game itself is kept, so the new model continues from the current
-        state. The client is not told about the pause yet.
+        After the switch, the game is reset as in ``reset`` (paused, new
+        game, init message, ``crashed`` cleared), and then the model update
+        message is sent. Selecting the current model also resets the game.
 
         Args:
             model_id: The id of the new model, as listed in the catalog.
@@ -179,7 +181,7 @@ class GameRunner:
         """
         try:
             self.game.policy = self._policy_selector.select_policy(model_id)
-            self.pause()
+            self.curr_model_id = model_id
         except ValueError as e:
             logger.warning(
                 "Invalid model id %s chosen for game %s",
@@ -187,9 +189,8 @@ class GameRunner:
             raise InvalidCommandError(
                 f"Invalid model id {model_id}. Must be one of "
                 f"{list(self._policy_selector.policies.keys())}") from e
-        # TODO: send confirmation message
-        # TODO: restart?
-        pass
+        await self.reset()
+        await self.send_frame(self.model_update_message())
 
     def set_speed(self, tick_ms: int):
         """Sets the delay between moves, effective from the next tick.
@@ -282,9 +283,13 @@ class GameRunner:
             ``"type": "init_message"`` and the runner's ``game_id``.
         """
         snapshot = self.game.snapshot()
-        return snapshot | {"type": "init_message", "game_id": self.id}
+        return snapshot | {
+            "type": "init_message",
+            "game_id": self.id,
+            "model_id": self.curr_model_id
+        }
 
-    def end_message(self):
+    def end_message(self) -> dict:
         """Returns the frame sent when the game ends.
 
         Returns:
@@ -301,6 +306,22 @@ class GameRunner:
             "step_count": snapshot["step_count"],
             "snake_length": len(snapshot["snake"]),
             "won": snapshot["won"],
+        }
+
+    def model_update_message(self) -> dict:
+        """Returns the frame sent after ``set_model`` switched the model.
+
+        It is sent after the init message of the reset that ``set_model``
+        does.
+
+        Returns:
+            A dict with ``"type": "model_changed"`` and a ``message`` that
+            says the game was reset and paused.
+        """
+        return {
+            "type": "model_changed",
+            "message": "Model has been updated. The game has been reset and paused.",
+            "model_id": self.curr_model_id,
         }
 
     @staticmethod

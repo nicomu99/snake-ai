@@ -52,7 +52,7 @@ class Speed(BaseModel):
 
 
 class SetModel(BaseModel):
-    """Switches the model that plays the game and pauses it.
+    """Switches the model that plays the game and resets the game.
 
     Attributes:
         model_id: The id of the model to use, as listed in the model
