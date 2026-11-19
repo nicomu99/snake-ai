@@ -1,4 +1,5 @@
 {
+  "default_model": "dqn-200k",
   "models": [
     {
       "id": "dqn-200k",

@@ -21,20 +21,25 @@ class PolicySelector:
         model_catalog: The catalog entries of the loaded models, by model id.
         policies: The loaded policies, by model id. Must have the same keys
             as ``model_catalog``.
+        default_model_id: The id of the model that new games start with.
+            Must be a key of ``policies``.
 
     Attributes:
         model_catalog: The catalog entries of the available models, by
             model id.
         policies: The loaded policies, by model id.
+        default_model_id: The id of the model that new games start with.
     """
 
     def __init__(
         self,
         model_catalog: dict[str, ModelEntry],
-        policies: dict[str, Policy]
+        policies: dict[str, Policy],
+        default_model_id: str,
     ):
         self.model_catalog = model_catalog
         self.policies: dict[str, Policy] = policies
+        self.default_model_id = default_model_id
 
     def select_policy(self, model_id: str) -> Policy:
         """Returns the shared policy of a model.
@@ -58,26 +63,27 @@ class PolicySelector:
     def choose_default(self):
         """Returns the policy that new games start with.
 
-        The default model id is hard-coded to ``"dqn-200k"`` for now.
+        The default is the catalog's ``"default_model"``. ``from_path``
+        already checks that it was loaded.
 
         Returns:
             The default model's shared policy.
 
         Raises:
-            ValueError: If the default model was not loaded, for example
-                because its file is missing.
+            ValueError: If ``default_model_id`` is not a loaded model. This
+                only happens if the selector was created directly with a
+                wrong id, not through ``from_path``.
         """
-        # TODO
-        default_model_id = "dqn-200k"
-        return self.select_policy(default_model_id)
+        return self.select_policy(self.default_model_id)
 
     @classmethod
     def from_path(cls, model_catalog_path: Path, model_path: Path):
         """Reads a catalog file and loads every model listed in it.
 
-        The catalog is a JSON object with a ``"models"`` list, where each
-        item has the fields of ``ModelEntry``. Entries whose model file does
-        not exist are skipped with a warning.
+        The catalog is a JSON object with a ``"default_model"`` id and a
+        ``"models"`` list, where each item has the fields of ``ModelEntry``.
+        Entries whose model file does not exist are skipped with a warning,
+        but the default model must be loaded.
 
         Args:
             model_catalog_path: The catalog file, e.g. ``models.json``.
@@ -90,12 +96,16 @@ class PolicySelector:
         Raises:
             FileNotFoundError: If the catalog file does not exist.
             json.JSONDecodeError: If the catalog is not valid JSON.
-            KeyError: If the catalog has no ``"models"`` key.
+            KeyError: If the catalog has no ``"models"`` or
+                ``"default_model"`` key.
             pydantic.ValidationError: If an entry does not match
                 ``ModelEntry``.
+            ValueError: If the default model was not loaded, because its id
+                is not in the catalog or its file is missing.
         """
-        data =json.loads(model_catalog_path.read_text())
+        data = json.loads(model_catalog_path.read_text())
         model_entries = [ModelEntry.model_validate(m) for m in data["models"]]
+        default_model_id = data["default_model"]
         model_catalog = {}
         policies = {}
         for m in model_entries:
@@ -106,4 +116,8 @@ class PolicySelector:
                 continue
             model_catalog[m.id] = m
             policies[m.id] = Policy.load_model(m.uri, model_path)
-        return cls(model_catalog, policies)
+        if default_model_id not in policies:
+            raise ValueError(
+                f"Default model {default_model_id} was not loaded "
+                f"(unknown id or missing file). Loaded: {list(policies)}")
+        return cls(model_catalog, policies, default_model_id)

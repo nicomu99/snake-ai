@@ -48,12 +48,16 @@ async def lifespan(app: FastAPI):
         FileNotFoundError: If the model catalog does not exist. The server
             then fails to start. Listed models whose file is missing are
             only skipped with a warning.
+        ValueError: If the catalog's default model could not be loaded.
+            The server then fails to start.
     """
     # redis_url = "redis://localhost:6379"      # TODO: url
     settings = get_settings()
     # app.state.redis = redis.Redis.from_url(redis_url, decode_responses=True)
+    model_catalog = settings.model_catalog
+    assert model_catalog is not None
     policy_selector = PolicySelector.from_path(
-        settings.model_catalog, settings.model_path)
+        model_catalog, settings.model_path)
     app.state.policy_selector = policy_selector
     app.state.runner_registry = GameRunnerRegistry(policy_selector)
     game_session_sweeper = GameRunnerSweeper(app.state.runner_registry)
