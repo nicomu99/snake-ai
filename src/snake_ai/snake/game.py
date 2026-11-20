@@ -8,7 +8,7 @@ Attributes:
 import copy
 import logging
 
-from snake_ai.ai import Policy
+from snake_ai.ai.policy import Policy
 from snake_ai.snake.snake_env import SnakeEnv
 
 logger = logging.getLogger(__name__)

@@ -1,7 +1,9 @@
+"""Greedy evaluation of a ``Policy`` on a fixed set of seeded games."""
+
 import numpy as np
 from tqdm import tqdm
 
-from snake_ai.ai import Policy
+from snake_ai.ai.policy import Policy
 from snake_ai.snake import Game
 
 
@@ -9,56 +11,80 @@ def evaluate(
     policy: Policy,
     n_episodes: int = 50,
     max_steps: int = 500,
-    seed: int = 10
+    seed: int = 10,
+    progress: bool = False,
 ) -> dict:
-    """Evaluation script to quantify the performance of a policy.
+    """Plays ``n_episodes`` greedy games and measures how well the policy does.
 
-    Computes the following metrics:
-        - food_mean:
-        - win_rate: relative number of times the policy won games
-        - collision_rate: relative number of times the policy bit itself
-        - reversal_rate: relative number of times the policy tried reversing
-            the direction
-        - timeout_rate: ?
+    Episode ``i`` is seeded with ``seed + i``, so repeated calls play the same
+    boards and their results are comparable over the course of training. The
+    policy is put into eval mode while playing, and its previous mode is
+    restored afterward.
+
+    Args:
+        policy: The policy to evaluate.
+        n_episodes: The number of games to play. Must be at least 1.
+            Defaults to 50.
+        max_steps: The step cap per game. A game that reaches it without
+            ending counts as a timeout. Defaults to 500.
+        seed: The seed of the first game. Defaults to 10.
+        progress: Whether to show a progress bar. Defaults to False, so it
+            doesn't clutter the trainer's own progress bar.
+
+    Returns:
+        A dict of metrics, keyed with an ``eval/`` prefix:
+
+        - ``food_mean``, ``food_median``, ``food_max``: The amount of food
+          eaten per game.
+        - ``win_rate``: The share of games that were won.
+        - ``collision_rate``: The share of games lost by the snake running
+          into itself.
+        - ``reversal_rate``: The share of games lost by reversing direction.
+        - ``timeout_rate``: The share of games that reached ``max_steps``
+          without ending.
+        - ``steps_per_food``: The total number of steps divided by the total
+          amount of food eaten, or 0 if no food was eaten. Steps after the
+          last food of a game are included, so timeouts make it larger.
+
+    Raises:
+        ValueError: If ``n_episodes`` is less than 1.
     """
     if n_episodes < 1:
         raise ValueError(
             f"Invalid number of episodes {n_episodes}, must be larger than 0")
 
-    policy = policy.eval()
+    was_training = policy.training
+    policy.eval()
     game = Game(policy)
-    game.reset(seed)
-    seed += 1
 
     score_list = []
     win, collision, reversal, timeout, total_steps = 0, 0, 0, 0, 0
-    actions = []
-    for _ in tqdm(range(n_episodes)):
-        while not game.game_finished and game.step_count < max_steps:
-            action = policy.act(game.snake_env.get_state())
-            game.step(action)
-            actions.append(action)
+    try:
+        for episode in tqdm(range(n_episodes), disable=not progress):
+            game.reset(seed=seed + episode)
+            while not game.game_finished and game.step_count < max_steps:
+                action = policy.act(game.snake_env.get_state())
+                game.step(action)
 
-        score = game.snake_env.score
-        score_list.append(score)
-        total_steps += game.step_count
+            score_list.append(game.snake_env.score)
+            total_steps += game.step_count
 
-        env_state = game.snake_env.get_game_state()
-        if env_state == "game_won":
-            win += 1
-        elif env_state == "collision":
-            collision += 1
-        elif env_state == "direction_reversal":
-            reversal += 1
-        else:
-            timeout += 1
-        game.reset(seed=seed)
-        seed += 1
+            env_state = game.snake_env.get_game_state()
+            if env_state == "game_won":
+                win += 1
+            elif env_state == "collision":
+                collision += 1
+            elif env_state == "direction_reversal":
+                reversal += 1
+            else:
+                timeout += 1
+    finally:
+        policy.train(was_training)
 
     score_list = np.array(score_list)
     food_sum = np.sum(score_list)
     steps_per_food = total_steps / food_sum if food_sum > 0 else 0
-    metrics_dict = {
+    return {
         "eval/food_mean": np.mean(score_list),
         "eval/food_median": np.median(score_list),
         "eval/food_max": np.max(score_list),
@@ -67,6 +93,4 @@ def evaluate(
         "eval/reversal_rate": reversal / n_episodes,
         "eval/timeout_rate": timeout / n_episodes,
         "eval/steps_per_food": steps_per_food,
-        "eval/action_hist": actions,
     }
-    return metrics_dict

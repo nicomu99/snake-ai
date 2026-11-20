@@ -2,13 +2,14 @@
 
 import copy
 import logging
-from collections import deque
+from collections import Counter, defaultdict, deque
 from datetime import datetime
 from pathlib import Path
 from random import Random
 
 import torch
 from torch.nn import MSELoss
+from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -71,6 +72,9 @@ class DQNTrainer:
                 already loaded with weights to continue training. The target
                 network starts as a copy of it.
             seed: Random number generator seed. Defaults to 11.
+            summary_writer: The TensorBoard writer that training metrics are
+                written to. If None, no metrics are written. Defaults to
+                None.
         """
         logger.info("Initializing agent")
 
@@ -86,17 +90,20 @@ class DQNTrainer:
         self.criterion = MSELoss(reduction="mean")
         self.experience_replay = deque(maxlen=10000)
         self.batch_size = 256
-        self.epsilon = 1.0
         self.epsilon_decay = 0.99
-        self.epsilon_min = 0.1
         self.gamma = 0.95
+
+        self.epsilon_start = 1.0
+        self.epsilon = 1.0
+        self.epsilon_min = 0.1
+        self.epsilon_decay_steps = 200_000
 
         self.train_steps = 1_000_000
         self.learning_starts = 10_000
 
         self.eval_steps = 10_000
         self.eval_episodes = 50
-        self.eval_max_steps = 50
+        self.eval_max_steps = 500
 
         # Variables for updating the target model periodically
         self.update_target_steps = 1000
@@ -104,7 +111,13 @@ class DQNTrainer:
         self.steps = 0
 
         self.device = self.policy.device
+        # Train metrics are averaged over this many updates before writing
+        self.log_train_updates = 100
+
         self.summary_writer = summary_writer
+        if self.summary_writer is None:
+            logger.warning(
+                "No summary writer given, training metrics will not be saved.")
 
     def train(self, env, model_path: str | Path):
         """Trains the policy and saves its weights.
@@ -174,7 +187,10 @@ class DQNTrainer:
         """
         state = self.policy.encode_state(env.reset())
         score = []
+        episode = 0
         episode_score = 0
+        recent_outcomes = deque(maxlen=100)
+        train_metrics = defaultdict(list)
         with logging_redirect_tqdm():
             for _ in tqdm(range(self.train_steps)):
                 reward, next_state, action, done = self.play_one_step(state, env)
@@ -184,29 +200,43 @@ class DQNTrainer:
                 self.steps += 1
                 episode_score += reward
 
+                # decay epsilon
+                frac = min(self.steps / self.epsilon_decay_steps, 1.0)
+                self.epsilon = self.epsilon_start + frac * (
+                        self.epsilon_start - self.epsilon_min)
+
                 if done:
+                    recent_outcomes.append(env.snake_env.get_game_state())
+                    counts = Counter(recent_outcomes)
+                    n = len(recent_outcomes)
+
+                    episode += 1
                     episode_dict = {
                         "episode/return": episode_score,
                         "episode/food": env.snake_env.score,
-                        "episode/end_reason": env.snake_env.get_game_state(),
+                        "episode/length": env.step_count,
+                        "episode/win_rate": counts["game_won"] / n,
+                        "episode/collision_rate": counts["collision"] / n,
+                        "episode/reversal_rate": counts["direction_reversal"] / n,
                         "replay/size": len(self.experience_replay),
                         "explore/epsilon": self.epsilon,
-                        "episode/length": env.step_count,
                     }
+                    self.write_metrics(episode_dict)
 
                     state = self.policy.encode_state(env.reset())
                     score.append(episode_score)
                     episode_score = 0
 
-                    # Decay epsilon after each episode
-                    if self.epsilon > self.epsilon_min:
-                        self.epsilon *= self.epsilon_decay
-
                 if (
                     self.steps > self.learning_starts and
                     self.steps % self.train_policy_steps == 0
                 ):
-                    train_metrics = self.train_from_experience()
+                    for k, v in self.train_from_experience().items():
+                        train_metrics[k].append(v)
+                    if len(train_metrics["train/loss"]) >= self.log_train_updates:
+                        self.write_metrics(
+                            {k: sum(v) / len(v) for k, v in train_metrics.items()})
+                        train_metrics.clear()
 
                 if self.steps % self.update_target_steps == 0:
                     self.update_target_model()
@@ -220,15 +250,24 @@ class DQNTrainer:
                 if self.steps % self.eval_steps == 0:
                     eval_metrics = evaluate(
                         self.policy, self.eval_episodes, self.eval_max_steps)
+                    self.write_metrics(eval_metrics)
+        if self.summary_writer is not None:
+            self.summary_writer.close()
 
     def write_metrics(self, metric_dict: dict):
+        """Writes scalar metrics to the summary writer at the current step.
+
+        Does nothing if there is no summary writer. The writer flushes to
+        disk on its own schedule and on ``close``.
+
+        Args:
+            metric_dict: Maps TensorBoard tags to scalar values.
+        """
         if self.summary_writer is None:
-            logger.warning(
-                "Summary writer could not be found, no metrics will be saved.")
             return
 
         for k, v in metric_dict.items():
-            self.summary_writer.add_scalar(k, )
+            self.summary_writer.add_scalar(k, v, self.steps)
 
     def store_experience(self, state, action, reward, next_state, done):
         """Adds one transition to the replay buffer.
@@ -264,6 +303,12 @@ class DQNTrainer:
         The target for each transition is
         ``reward + gamma * Q_target(next_state, argmax Q_policy(next_state))``,
         with the future term dropped for terminal transitions.
+
+        Returns:
+            A dict of ``train/`` metrics for this update: ``loss``,
+            ``grad_norm`` (the total gradient norm before the optimizer
+            step), ``q_mean`` and ``q_max`` (of the predicted Q-values of the
+            taken actions) and ``target_q_mean``.
         """
         batch = self.sample_experience()
         states, actions, rewards, next_states, dones = zip(*batch, strict=False)
@@ -292,9 +337,12 @@ class DQNTrainer:
         self.optimizer.zero_grad()
         loss = self.criterion(predicted_q_values, target_q_values)
         loss.backward()
+        # An infinite max norm only measures the norm, it doesn't clip
+        grad_norm = clip_grad_norm_(self.policy.parameters(), float("inf"))
 
         metrics_dict = {
             "train/loss": loss.item(),
+            "train/grad_norm": grad_norm.item(),
             "train/q_mean": predicted_q_values.mean().item(),
             "train/q_max": predicted_q_values.max().item(),
             "train/target_q_mean": target_q_values.mean().item(),
