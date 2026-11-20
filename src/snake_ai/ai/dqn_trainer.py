@@ -10,9 +10,11 @@ from random import Random
 import torch
 from torch.nn import MSELoss
 from torch.optim import Adam
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
+from snake_ai.ai.evaluate import evaluate
 from snake_ai.ai.policy import Policy
 
 logger = logging.getLogger(__name__)
@@ -56,7 +58,12 @@ class DQNTrainer:
         device: The device of ``policy``.
     """
 
-    def __init__(self, policy: Policy, seed: int = 11):
+    def __init__(
+        self,
+        policy: Policy,
+        seed: int = 11,
+        summary_writer: SummaryWriter | None = None
+    ):
         """Sets up the target network, optimizer and training hyperparameters.
 
         Args:
@@ -87,12 +94,17 @@ class DQNTrainer:
         self.train_steps = 1_000_000
         self.learning_starts = 10_000
 
+        self.eval_steps = 10_000
+        self.eval_episodes = 50
+        self.eval_max_steps = 50
+
         # Variables for updating the target model periodically
         self.update_target_steps = 1000
         self.train_policy_steps = 4
         self.steps = 0
 
         self.device = self.policy.device
+        self.summary_writer = summary_writer
 
     def train(self, env, model_path: str | Path):
         """Trains the policy and saves its weights.
@@ -163,7 +175,7 @@ class DQNTrainer:
         state = self.policy.encode_state(env.reset())
         score = []
         episode_score = 0
-        with ((logging_redirect_tqdm())):
+        with logging_redirect_tqdm():
             for _ in tqdm(range(self.train_steps)):
                 reward, next_state, action, done = self.play_one_step(state, env)
 
@@ -173,6 +185,15 @@ class DQNTrainer:
                 episode_score += reward
 
                 if done:
+                    episode_dict = {
+                        "episode/return": episode_score,
+                        "episode/food": env.snake_env.score,
+                        "episode/end_reason": env.snake_env.get_game_state(),
+                        "replay/size": len(self.experience_replay),
+                        "explore/epsilon": self.epsilon,
+                        "episode/length": env.step_count,
+                    }
+
                     state = self.policy.encode_state(env.reset())
                     score.append(episode_score)
                     episode_score = 0
@@ -185,7 +206,7 @@ class DQNTrainer:
                     self.steps > self.learning_starts and
                     self.steps % self.train_policy_steps == 0
                 ):
-                    self.train_from_experience()
+                    train_metrics = self.train_from_experience()
 
                 if self.steps % self.update_target_steps == 0:
                     self.update_target_model()
@@ -195,6 +216,19 @@ class DQNTrainer:
                     logger.info(
                         "Average episode score: %.3f", avg_score
                     )
+
+                if self.steps % self.eval_steps == 0:
+                    eval_metrics = evaluate(
+                        self.policy, self.eval_episodes, self.eval_max_steps)
+
+    def write_metrics(self, metric_dict: dict):
+        if self.summary_writer is None:
+            logger.warning(
+                "Summary writer could not be found, no metrics will be saved.")
+            return
+
+        for k, v in metric_dict.items():
+            self.summary_writer.add_scalar(k, )
 
     def store_experience(self, state, action, reward, next_state, done):
         """Adds one transition to the replay buffer.
@@ -224,7 +258,7 @@ class DQNTrainer:
         batch = [self.experience_replay[i] for i in indices]
         return batch
 
-    def train_from_experience(self):
+    def train_from_experience(self) -> dict:
         """Runs one Double DQN gradient update on a sampled batch.
 
         The target for each transition is
@@ -259,4 +293,12 @@ class DQNTrainer:
         loss = self.criterion(predicted_q_values, target_q_values)
         loss.backward()
 
+        metrics_dict = {
+            "train/loss": loss.item(),
+            "train/q_mean": predicted_q_values.mean().item(),
+            "train/q_max": predicted_q_values.max().item(),
+            "train/target_q_mean": target_q_values.mean().item(),
+        }
+
         self.optimizer.step()
+        return metrics_dict
