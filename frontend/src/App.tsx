@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Board } from './Board'
-import { BOARD_SIZE, DEFAULT_SPEED_LEVEL, MODELS, SPEED_LEVELS } from './config'
+import { BOARD_SIZE, DEFAULT_SPEED_LEVEL, SPEED_LEVELS } from './config'
 import { HowItLearns } from './HowItLearns'
+import { useModels } from './useModels'
 import { useSnakeGame } from './useSnakeGame'
 
 const pad = (n: number, width: number) => String(n).padStart(width, '0')
@@ -81,6 +82,10 @@ export default function App() {
   }
 
   const connected = status === 'open'
+  const models = useModels(connected)
+  // Until the list has loaded (or if it failed), still show the current model.
+  const modelOptions =
+    models ?? (game.modelId ? [{ id: game.modelId, name: game.modelId }] : [])
 
   return (
     <div className="layout">
@@ -121,9 +126,9 @@ export default function App() {
             <select
               value={game.modelId ?? ''}
               onChange={(e) => game.setModel(e.target.value)}
-              disabled={!connected}
+              disabled={!connected || !models}
             >
-              {MODELS.map((m) => (
+              {modelOptions.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>

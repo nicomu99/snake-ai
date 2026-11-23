@@ -1,6 +1,7 @@
 // Message types of the WebSocket protocol at /ws/play.
 // Mirrors src/snake_ai/api/game_runner.py (server → client) and
 // src/snake_ai/api/command_message.py (client → server).
+// The HTTP responses at the end mirror src/snake_ai/api/schemas.py.
 
 /** A board position as [x, y]; y grows downwards. */
 export type Pos = [number, number]
@@ -49,4 +50,16 @@ export const CLOSE_EVICTED = 4001 // "too many games"
 export function toSnapshot(msg: Snapshot): Snapshot {
   const { snake, food, score, lost, won, game_state, step_count } = msg
   return { snake, food, score, lost, won, game_state, step_count }
+}
+
+/** One entry of `GET /models`. */
+export interface ModelItem {
+  id: string
+  name: string
+}
+
+/** The response of `GET /models`. */
+export interface ModelsResponse {
+  default_model_id: string
+  models: ModelItem[]
 }

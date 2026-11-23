@@ -1,14 +1,20 @@
-"""The WebSocket endpoint clients use to watch and control a game."""
+"""The API routes.
+
+``WS /ws/play`` lets a client watch and control a game, ``GET /models`` lists
+the models a game can be played with.
+"""
 
 from json import JSONDecodeError
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket
 
+from snake_ai.ai import PolicySelector
 from snake_ai.api.command_message import parse_message
-from snake_ai.api.deps import get_registry
+from snake_ai.api.deps import get_policy_selector, get_registry
 from snake_ai.api.errors import InvalidCommandError
 from snake_ai.api.game_runner_registry import GameRunnerRegistry
+from snake_ai.api.schemas import ModelItem, ModelResponse
 from snake_ai.api.web_socket_sink import WebSocketSink
 
 router = APIRouter()
@@ -64,3 +70,26 @@ async def play(
                 })
     finally:
         await registry.detach(sink, session)
+
+
+@router.get("/models")
+async def retrieve_models(
+    policy_selector: Annotated[PolicySelector, Depends(get_policy_selector)],
+) -> ModelResponse:
+    """Lists the models that were loaded at startup.
+
+    Models listed in the catalog whose file was missing are left out, so
+    every returned id can be passed to ``set_model``.
+
+    Args:
+        policy_selector: The shared selector holding the loaded models.
+
+    Returns:
+        The default model id and the loaded models, in catalog order.
+    """
+    default_model_id = policy_selector.default_model_id
+    models = [
+        ModelItem(id=mid, name=m_entry.name)
+        for mid, m_entry in policy_selector.model_catalog.items()
+    ]
+    return ModelResponse(default_model_id=default_model_id, models=models)

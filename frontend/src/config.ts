@@ -1,15 +1,3 @@
-export interface ModelOption {
-  id: string
-  name: string
-}
-
-// TODO: fetch from `GET /models` once the backend has that endpoint
-// (see the TODO list in the README). Must match policy_models/models.json.
-export const MODELS: ModelOption[] = [
-  { id: 'dqn-200k', name: 'DQN 200K' },
-  { id: 'dqn-1m', name: 'DQN 1M' },
-]
-
 /** Tiles per side. Must match TILE_COUNT in src/snake_ai/utils/constants.py. */
 export const BOARD_SIZE = 5
 
