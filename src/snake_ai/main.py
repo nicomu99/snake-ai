@@ -21,8 +21,9 @@ from fastapi import FastAPI
 
 from snake_ai.ai import PolicySelector
 from snake_ai.api import GameRunnerRegistry
+from snake_ai.api.endpoints import router as endpoint_router
 from snake_ai.api.game_runner_sweeper import GameRunnerSweeper
-from snake_ai.api.sockets import router
+from snake_ai.api.sockets import router as socket_router
 from snake_ai.utils import configure_logging, get_settings
 
 
@@ -83,7 +84,8 @@ def main():
     configure_logging()
 
     app = FastAPI(title="Snake AI", lifespan=lifespan)
-    app.include_router(router)
+    app.include_router(socket_router)
+    app.include_router(endpoint_router)
     return app
 
 
