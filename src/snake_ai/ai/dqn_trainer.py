@@ -293,7 +293,7 @@ class DQNTrainer:
         Returns:
             A list of up to ``batch_size`` transition tuples.
         """
-        indices = torch.randperm(len(self.experience_replay))[:self.batch_size]
+        indices = torch.randperm(len(self.experience_replay))[:self.batch_size].tolist()
         batch = [self.experience_replay[i] for i in indices]
         return batch
 
