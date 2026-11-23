@@ -1,0 +1,35 @@
+# ${BACKEND_URL} is substituted by the nginx image's entrypoint on start.
+# Other $variables are left alone, because only defined env vars are replaced.
+server {
+    listen 8080;
+    root /usr/share/nginx/html;
+
+    # Same routes as the Vite dev proxy (vite.config.ts), so the app can keep
+    # talking to its own origin.
+    location /ws {
+        proxy_pass ${BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        # Idle sockets (a paused game) would otherwise be closed after 60 s.
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+
+    location = /models {
+        proxy_pass ${BACKEND_URL};
+        proxy_set_header Host $host;
+    }
+
+    # Vite puts a content hash into every file name under /assets.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # index.html must never be cached, so a new build is picked up.
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri /index.html;
+    }
+}

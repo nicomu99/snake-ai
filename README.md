@@ -53,6 +53,40 @@ Run test client
 uv run python3 -m websockets ws://127.0.0.1:8000/ws/play
 ```
 
+### Run with Docker and K8s
+
+(optionally) Build a docker image
+
+```bash
+docker build -t <image-name>:<image-version> .
+```
+
+and push it to your docker hub.
+
+```bash
+docker push <image-name>:<image-version>
+```
+
+#### Frontend image
+
+`frontend/Dockerfile` builds the frontend (`npm run build`) and serves `dist/` with nginx (as a non-root user, on port 8080). Like the Vite dev server, nginx forwards `/ws` and `/models` to the backend, so the app keeps talking to its own origin. Build it with `frontend/` as the build context:
+
+```bash
+docker build -t <image-name>-frontend:<image-version> frontend
+```
+
+The backend address is read from `BACKEND_URL` when the container starts (default `http://backend:8080`, i.e. a Docker network alias or a Kubernetes Service named `backend`). To try the image against a backend running locally with uvicorn on port 8000:
+
+```bash
+docker run --rm -p 8080:8080 \
+  --add-host=host.docker.internal:host-gateway \
+  -e BACKEND_URL=http://host.docker.internal:8000 \
+  <image-name>-frontend:<image-version>
+```
+
+Then open http://localhost:8080. nginx fails to start if the host in `BACKEND_URL` can't be resolved, so the backend's name must exist on the container's network. A new backend route that the frontend calls needs a `location` in `frontend/nginx/default.conf.template`, the same as in `vite.config.ts`.
+
+
 
 ## TODO
 
@@ -77,7 +111,7 @@ Within each category, bugs come first, then unfinished features, then cleanup.
 - [ ] 🔴 Run the setup on a Kubernetes cluster.
   - [ ] 🟡 Dockerfiles: one for the backend (uv, with the models baked into the image or mounted from a volume), and one for the frontend (`npm run build`, served by nginx), unless FastAPI serves `frontend/dist` itself.
   - [ ] 🟡 Manifests (or a Helm chart): a Deployment and a Service for the backend, plus an Ingress that routes `/ws` to the backend with WebSocket support and `/` to the frontend. Pass the `SNAKE_AI_*` settings through a ConfigMap.
-  - [ ] 🟢 Add a health endpoint for the liveness and readiness probes.
+  - [x] 🟢 Add a health endpoint for the liveness and readiness probes.
 - [ ] 🔴 Implement the Redis-backed registry: `save` and `delete` are stubs and the Redis code is commented out.
   - Games live in the server process's memory, so start with one backend replica. With more replicas, reconnecting by `game_id` only works with sticky sessions or the Redis-backed registry.
 
