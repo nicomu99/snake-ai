@@ -11,11 +11,14 @@ COPY README.md ./
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
-ENV SNAKE_AI_MODEL_PATH=/models \
+ENV PATH="/app/.venv/bin:$PATH" \
+    SNAKE_AI_MODEL_PATH=/models \
     SNAKE_AI_LOG_PATH=/tmp/snake-ai/app.log
+
+COPY policy_models /models
 
 RUN useradd --create-home appuser
 USER appuser
 
 EXPOSE 8080
-CMD ["uv", "run", "uvicorn", "app.main:main_app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "snake_ai.main:main_app", "--host", "0.0.0.0", "--port", "8080"]

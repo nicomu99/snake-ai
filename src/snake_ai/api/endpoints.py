@@ -12,7 +12,7 @@ from snake_ai.api.schemas import ModelItem, ModelResponse
 router = APIRouter()
 
 
-@router.get("/models")
+@router.get("/api/models")
 async def retrieve_models(
     policy_selector: Annotated[PolicySelector, Depends(get_policy_selector)],
 ) -> ModelResponse:
@@ -35,7 +35,7 @@ async def retrieve_models(
     return ModelResponse(default_model_id=default_model_id, models=models)
 
 
-@router.get("/health")
+@router.get("/api/health")
 async def health():
     """Answers the liveness probe.
 
@@ -48,7 +48,7 @@ async def health():
     return {"status": "ok"}
 
 
-@router.get("/ready")
+@router.get("/api/ready")
 async def ready(request: Request):
     """Answers the readiness probe.
 

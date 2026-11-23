@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - image: muellern99/snake-ai-backend:1.0.0
+        imagePullPolicy: IfNotPresent
+        name: backend
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: SNAKE_AI_MAX_GAME_COUNT
+          value: "50"
+        - name: SNAKE_AI_LOG_LEVEL
+          value: INFO
+        startupProbe:
+          httpGet:
+            path: /api/ready
+            port: http
+          failureThreshold: 30
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          periodSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/ready
+            port: http
+          periodSeconds: 5
+          failureThreshold: 3

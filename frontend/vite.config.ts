@@ -8,7 +8,7 @@ import { defineConfig } from 'vite'
 // index.html (status 200), so a missing entry shows up as a JSON parse error.
 const backend = {
   '/ws': { target: 'http://localhost:8000', ws: true },
-  '/models': 'http://localhost:8000',
+  '/api': 'http://localhost:8000',
 }
 
 // https://vite.dev/config/

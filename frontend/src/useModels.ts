@@ -17,9 +17,9 @@ export function useModels(enabled: boolean): ModelItem[] | null {
   useEffect(() => {
     if (!enabled || models) return
     const controller = new AbortController()
-    fetch('/models', { signal: controller.signal })
+    fetch('/api/models', { signal: controller.signal })
       .then((res) => {
-        if (!res.ok) throw new Error(`GET /models failed with ${res.status}`)
+        if (!res.ok) throw new Error(`GET /api/models failed with ${res.status}`)
         return res.json() as Promise<ModelsResponse>
       })
       .then((data) => setModels(data.models))
