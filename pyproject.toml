@@ -12,13 +12,19 @@ dependencies = [
     "numpy>=2.5.5",
     "pydantic>=2.14.3",
     "pydantic-settings>=2.16.2",
-    "pylint>=4.1.4",
     "redis>=8.1.0",
     "tensorboard>=2.21.0",
-    "torch>=2.15.0",
     "tqdm>=4.70.1",
     "websockets>=17.4",
 ]
+
+[dependency-groups]
+dev = [
+    "pylint>=4.1.4",
+    "ruff>=0.17.3",
+]
+gpu = ["torch>=2.15.0"]
+cpu = ["torch>=2.15.0"]
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]
@@ -30,7 +36,14 @@ line-length = 88
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "W"]
 
-[dependency-groups]
-dev = [
-    "ruff>=0.17.3",
-]
+[tool.uv]
+default-groups = ["dev", "gpu"]
+conflicts = [[{ group = "cpu" }, { group = "gpu" }]]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", group = "cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true   # only torch comes from this index

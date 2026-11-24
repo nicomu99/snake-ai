@@ -15,12 +15,12 @@ spec:
         app: backend
     spec:
       containers:
-      - image: muellern99/snake-ai-backend:1.0.0
+      - image: muellern99/snake-ai-backend:1.0.1
         imagePullPolicy: IfNotPresent
         name: backend
         ports:
-        - containerPort: 8080
-          name: http
+        - containerPort: 8080     # this is purely informational; should match what the container is actually listening on
+          name: http              # optional name, that can be used in other manifests to guarantee single source of truth
         env:
         - name: SNAKE_AI_MAX_GAME_COUNT
           value: "50"

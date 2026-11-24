@@ -1,92 +1,159 @@
 # Snake AI
 
-# Setup
+A Snake game played by a Double-DQN agent (PyTorch) on a 5×5 board that wraps at the edges.
 
-Synchronize dependencies: 
+| Part | Where | What it does |
+|---|---|---|
+| Backend | `src/snake_ai/` | FastAPI server: runs the games and streams them over a WebSocket (`/ws/play`), plus HTTP routes under `/api` |
+| Frontend | `frontend/` | Vite + React + TypeScript web app that shows and controls the games |
+| Local GUI | `src/snake_ai/local_main.py` | Tkinter window that plays (or trains) without a server |
+| Models | `policy_models/` | Trained policies (`*.pt`) and the catalog `models.json` |
+| Deployment | `Dockerfile`, `frontend/Dockerfile`, `k8s/` | Container images and Kubernetes manifests |
+
+**Contents:** [Requirements](#requirements) · [Install](#install) · [Run locally](#run-locally) · [Configuration](#configuration) · [Docker](#docker) · [Kubernetes](#kubernetes) · [TODO](#todo)
+
+## Requirements
+
+- [uv](https://docs.astral.sh/uv/) (it installs a matching Python, ≥ 3.12)
+- Node.js with npm, for the frontend
+- Docker, for the images; `kubectl` plus `gcloud` or minikube, for Kubernetes
+
+## Install
 
 ```bash
-uv sync
+uv sync                       # backend, with the dev tools and the CUDA build of torch
+cd frontend && npm install    # frontend
 ```
 
-Run websocket
+On a machine without an NVIDIA GPU, the CPU-only build of torch is much smaller:
+
+```bash
+uv sync --no-group gpu --group cpu
+```
+
+`uv run` syncs the environment by itself before each command, but only with the default groups (`dev`, `gpu`). After installing the CPU group, use `uv run --no-sync …`, or the next `uv run` switches back to the GPU build.
+
+## Run locally
+
+### Web app (backend + frontend)
+
+Start the backend in one terminal:
 
 ```bash
 uv run uvicorn snake_ai.main:main_app --reload
 ```
 
-Run local GUI
-
-```bash
-uv run python -m snake_ai.local_main
-```
-
-Run the web frontend
-
-The frontend lives in `frontend/` (Vite + React + TypeScript) and needs Node.js with npm. Install its dependencies once:
-
-```bash
-cd frontend
-npm install
-```
-
-Then start the websocket server (see above) in one terminal and the frontend dev server in a second one:
+and the frontend dev server in a second one:
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Open http://localhost:5173. The dev server forwards `/ws` to the websocket server on port 8000, so both have to be running. Code changes reload automatically.
+Open http://localhost:5173. The dev server forwards `/ws` and `/api` to the backend on port 8000, so both have to be running. Code changes reload automatically.
 
-Other frontend commands (run them in `frontend/`):
-
-```bash
-npm run build    # type-check and bundle into frontend/dist/
-npm run lint     # lint with oxlint
-```
-
-More details are in [frontend/README.md](frontend/README.md).
-
-Run test client
+Other commands:
 
 ```bash
-uv run python3 -m websockets ws://127.0.0.1:8000/ws/play
+uv run ruff check src                              # lint the backend (--fix also sorts imports)
+npm run build                                      # in frontend/: type-check and bundle into dist/
+npm run lint                                       # in frontend/: lint with oxlint
+uv run python -m websockets ws://127.0.0.1:8000/ws/play   # raw WebSocket test client
 ```
 
-### Run with Docker and K8s
+More frontend details are in [frontend/README.md](frontend/README.md).
 
-(optionally) Build a docker image
+### Local GUI
 
 ```bash
-docker build -t <image-name>:<image-version> .
+uv run python -m snake_ai.local_main [--model FILE] [--train] [--seed N]
 ```
 
-and push it to your docker hub.
+| Flag | Default | Effect |
+|---|---|---|
+| `--model FILE` | `dqn-1m.pt` | Model to play with: a file name in the model directory (`policy_models/`), or an absolute path |
+| `--train` | off | Train a new policy first, save it as `<timestamp>_model_<steps>.pt` in the model directory, then play with it |
+| `--seed N` | `42` | Seed for torch, the food placement and training, so runs are reproducible |
+
+Examples:
 
 ```bash
-docker push <image-name>:<image-version>
+uv run python -m snake_ai.local_main                         # play with dqn-1m.pt
+uv run python -m snake_ai.local_main --model dqn-200k.pt     # play with another model
+uv run python -m snake_ai.local_main --train --seed 7        # train, then play
 ```
 
-#### Frontend image
+## Configuration
 
-`frontend/Dockerfile` builds the frontend (`npm run build`) and serves `dist/` with nginx (as a non-root user, on port 8080). Like the Vite dev server, nginx forwards `/ws` and `/models` to the backend, so the app keeps talking to its own origin. Build it with `frontend/` as the build context:
+The backend (and the local GUI) read `SNAKE_AI_*` environment variables. Relative paths are resolved against the current directory.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SNAKE_AI_LOG_LEVEL` | `INFO` | Log level (upper case) |
+| `SNAKE_AI_LOG_PATH` | `<repo>/logs/app.log` | Log file |
+| `SNAKE_AI_MODEL_PATH` | `<repo>/policy_models` | Model directory |
+| `SNAKE_AI_MODEL_CATALOG` | `<model path>/models.json` | Catalog of the models the server offers |
+| `SNAKE_AI_MAX_GAME_COUNT` | `50` | Maximum number of games at once; the oldest one is closed when a new one exceeds it |
+
+## Docker
+
+Both images listen on port 8080 and run as a non-root user.
 
 ```bash
-docker build -t <image-name>-frontend:<image-version> frontend
+docker build -t <image-name>:<version> .                     # backend, with policy_models/ baked in
+docker build -t <image-name>-frontend:<version> frontend     # frontend (npm run build, served by nginx)
+docker push <image-name>:<version>                           # optional, for a cluster that pulls from Docker Hub
 ```
 
-The backend address is read from `BACKEND_URL` when the container starts (default `http://backend:8080`, i.e. a Docker network alias or a Kubernetes Service named `backend`). To try the image against a backend running locally with uvicorn on port 8000:
+Like the Vite dev server, the frontend's nginx forwards `/ws` and `/api` to the backend, so the app keeps talking to its own origin. The backend address is read from `BACKEND_URL` when the container starts (default `http://backend:8080`). To try the frontend image against a backend running locally with uvicorn on port 8000:
 
 ```bash
 docker run --rm -p 8080:8080 \
   --add-host=host.docker.internal:host-gateway \
   -e BACKEND_URL=http://host.docker.internal:8000 \
-  <image-name>-frontend:<image-version>
+  <image-name>-frontend:<version>
 ```
 
-Then open http://localhost:8080. nginx fails to start if the host in `BACKEND_URL` can't be resolved, so the backend's name must exist on the container's network. A new backend route that the frontend calls needs a `location` in `frontend/nginx/default.conf.template`, the same as in `vite.config.ts`.
+Then open http://localhost:8080. nginx fails to start if the host in `BACKEND_URL` can't be resolved. A new backend route that the frontend calls needs a `location` in `frontend/nginx/default.conf.template` and an entry in `frontend/vite.config.ts`.
 
+## Kubernetes
 
+The manifests in `k8s/` deploy the images `muellern99/snake-ai-backend` and `muellern99/snake-ai-frontend` from Docker Hub. The Ingress and `backend_config.yaml` use GKE features, so minikube runs without them.
+
+### GKE
+
+```bash
+export PROJECT_ID=my-project
+export REGION=europe-west3
+gcloud config set project $PROJECT_ID
+
+# Create an Autopilot cluster and point kubectl at it
+gcloud container clusters create-auto my-cluster --region=$REGION
+gcloud container clusters get-credentials my-cluster --region=$REGION
+
+kubectl apply -f k8s/
+kubectl get ingress backend-ingress -w     # wait for the external IP
+```
+
+It can take a few minutes after the IP shows up before the application is reachable.
+
+### minikube
+
+The frontend's nginx already forwards `/ws` and `/api` to the backend, so the Ingress is left out:
+
+```bash
+minikube start
+kubectl apply -f k8s/backend_deploy.yaml -f k8s/backend_svc.yaml \
+              -f k8s/frontend_deploy.yaml -f k8s/frontend_svc.yaml
+minikube service frontend-svc              # opens the frontend in the browser
+```
+
+To use images you built locally instead of the ones on Docker Hub, build them inside minikube with the tags from the manifests (they use `imagePullPolicy: IfNotPresent`):
+
+```bash
+minikube image build -t muellern99/snake-ai-backend:1.0.1 .
+minikube image build -t muellern99/snake-ai-frontend:1.0.0 frontend
+```
 
 ## TODO
 
@@ -108,9 +175,9 @@ Within each category, bugs come first, then unfinished features, then cleanup.
 
 ### Deployment
 
-- [ ] 🔴 Run the setup on a Kubernetes cluster.
+- [x] 🔴 Run the setup on a Kubernetes cluster.
   - [x] 🟡 Dockerfiles: one for the backend (uv, with the models baked into the image or mounted from a volume), and one for the frontend (`npm run build`, served by nginx), unless FastAPI serves `frontend/dist` itself.
-  - [ ] 🟡 Manifests (or a Helm chart): a Deployment and a Service for the backend, plus an Ingress that routes `/ws` to the backend with WebSocket support and `/` to the frontend. Pass the `SNAKE_AI_*` settings through a ConfigMap.
+  - [x] 🟡 Manifests (or a Helm chart): a Deployment and a Service for the backend, plus an Ingress that routes `/ws` to the backend with WebSocket support and `/` to the frontend. Pass the `SNAKE_AI_*` settings through a ConfigMap.
   - [x] 🟢 Add a health endpoint for the liveness and readiness probes.
 - [ ] 🔴 Implement the Redis-backed registry: `save` and `delete` are stubs and the Redis code is commented out.
   - Games live in the server process's memory, so start with one backend replica. With more replicas, reconnecting by `game_id` only works with sticky sessions or the Redis-backed registry.

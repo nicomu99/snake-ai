@@ -5,11 +5,11 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-default-groups --group cpu --no-install-project
 
 COPY README.md ./
 COPY src ./src
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-default-groups --group cpu
 
 ENV PATH="/app/.venv/bin:$PATH" \
     SNAKE_AI_MODEL_PATH=/models \
