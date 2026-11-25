@@ -43,12 +43,14 @@ class View:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
 
-        self.canvas = Canvas(self.root)
+        board_px = TILE_COUNT * TILE_SIZE * 10
+        self.canvas = Canvas(
+            self.root, width=board_px, height=board_px, highlightthickness=0)
         self.canvas.grid(column=0, row=0, sticky="N W E S")
 
-        self.root.geometry(
-            f"{TILE_COUNT * TILE_SIZE * 10}x"
-            f"{TILE_COUNT * TILE_SIZE * 10}")
+        # self.root.geometry(
+        #     f"{TILE_COUNT * TILE_SIZE * 10}x"
+        #     f"{TILE_COUNT * TILE_SIZE * 10}")
 
         self.start_button = Button(self.root, text="Start")
         self.start_button.grid(column=0, row=1, sticky="N W E S")

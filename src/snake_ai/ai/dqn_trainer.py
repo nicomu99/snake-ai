@@ -81,7 +81,7 @@ class DQNTrainer:
         lr: float = 0.001,
         warm_up: int = 10_000,
         train_steps: int = 1_000_000,
-        gamma: float = 0.95,
+        gamma: float = 0.99,
         batch_size: int = 256,
         update_target: int = 1_000,
         update_policy: int = 4,
@@ -143,7 +143,8 @@ class DQNTrainer:
         # Train metrics are averaged over this many updates before writing
         self.log_train_updates = 100
 
-        self.summary_writer = SummaryWriter(comment=f"_lr{lr}_steps_{train_steps}")
+        self.model_id = f"_lr{lr}_s{train_steps}_g{gamma}"
+        self.summary_writer = SummaryWriter(comment=self.model_id)
 
     def train(self, env, model_path: str | Path):
         """Trains the policy and saves its weights.
@@ -168,7 +169,7 @@ class DQNTrainer:
         model_path = Path(model_path)
         model_path.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-        model_file = model_path / f"{timestamp}_model_{self.train_steps}.pt"
+        model_file = model_path / f"{timestamp}_model_{self.model_id}.pt"
         torch.save(self.policy.state_dict(), model_file)
         env.reset()
 

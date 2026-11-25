@@ -282,9 +282,9 @@ class SnakeEnv:
 
         # Reward for moving closer to the treasure
         if new_distance < prev_distance:
-            reward += 0.1  # Small positive reward
+            reward += 0.01  # Small positive reward
         else:
-            reward -= 0.1  # Small negative reward
+            reward -= 0.01  # Small negative reward
 
         # Small penalty per step to encourage efficiency
         reward -= 0.001
