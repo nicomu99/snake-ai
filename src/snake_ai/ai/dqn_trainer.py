@@ -8,7 +8,7 @@ from pathlib import Path
 from random import Random
 
 import torch
-from torch.nn import MSELoss
+from torch.nn import SmoothL1Loss
 from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
@@ -41,29 +41,49 @@ class DQNTrainer:
         target_model: A frozen, periodically synced copy of ``policy`` used
             for training targets.
         optimizer: Adam optimizer for the policy network.
-        criterion: MSE loss between predicted and target Q-values.
+        criterion: Smooth L1 (Huber) loss between predicted and target
+            Q-values. It is less sensitive to large TD errors than MSE.
         experience_replay: A bounded buffer of
             ``(state, action, reward, next_state, done)`` transitions.
         batch_size: The number of transitions per training update.
-        epsilon: The current probability of taking a random action.
-        epsilon_decay: The factor ``epsilon`` is multiplied by each step.
+        epsilon: The current probability of taking a random action. It
+            decays linearly from ``epsilon_start`` to ``epsilon_min`` over
+            ``epsilon_decay_steps`` steps and then stays at ``epsilon_min``.
+        epsilon_start: The initial value of ``epsilon``.
         epsilon_min: The lower bound for ``epsilon``.
+        epsilon_decay_steps: The number of steps over which ``epsilon``
+            decays to ``epsilon_min``.
         gamma: The discount factor for future rewards.
         train_steps: The total number of environment steps in ``train``.
-        learning_starts: Steps to collect before the gated training updates
+        warm_up_steps: Steps to collect before the gated training updates
             begin.
         update_target_steps: How often (in steps) the target network is synced.
         train_policy_steps: How often (in steps) the gated training update
-            runs once ``learning_starts`` is reached.
+            runs once ``warm_up_steps`` is reached.
+        eval_steps: How often (in steps) the policy is evaluated with
+            ``evaluate``.
+        eval_episodes: The number of games per evaluation.
+        eval_max_steps: The step cap per evaluation game.
         steps: The number of environment steps taken so far.
         device: The device of ``policy``.
+        log_train_updates: The number of training updates whose metrics are
+            averaged before they are written.
+        summary_writer: The TensorBoard writer that metrics are written to.
+            It writes to ``runs/<date>_<host>_lr<lr>_steps_<train_steps>``
+            relative to the current working directory.
     """
 
     def __init__(
         self,
         policy: Policy,
         seed: int = 11,
-        summary_writer: SummaryWriter | None = None
+        lr: float = 0.001,
+        warm_up: int = 10_000,
+        train_steps: int = 1_000_000,
+        gamma: float = 0.95,
+        batch_size: int = 256,
+        update_target: int = 1_000,
+        update_policy: int = 4,
     ):
         """Sets up the target network, optimizer and training hyperparameters.
 
@@ -72,9 +92,18 @@ class DQNTrainer:
                 already loaded with weights to continue training. The target
                 network starts as a copy of it.
             seed: Random number generator seed. Defaults to 11.
-            summary_writer: The TensorBoard writer that training metrics are
-                written to. If None, no metrics are written. Defaults to
-                None.
+            lr: The learning rate of the Adam optimizer. Defaults to 0.001.
+            warm_up: The number of steps to collect into the replay buffer
+                before training updates begin. Defaults to 10_000.
+            train_steps: The total number of environment steps to train
+                for. Defaults to 1_000_000.
+            gamma: The discount factor for future rewards. Defaults to 0.95.
+            batch_size: The number of transitions per training update.
+                Defaults to 256.
+            update_target: How often (in steps) the target network is
+                synced with the policy. Defaults to 1_000.
+            update_policy: How often (in steps) a training update runs once
+                the warm-up is over. Defaults to 4.
         """
         logger.info("Initializing agent")
 
@@ -86,38 +115,34 @@ class DQNTrainer:
         self.target_model.eval()
 
         self.optimizer = Adam(
-            self.policy.parameters(), lr=0.001)
-        self.criterion = MSELoss(reduction="mean")
-        self.experience_replay = deque(maxlen=10000)
-        self.batch_size = 256
-        self.epsilon_decay = 0.99
-        self.gamma = 0.95
+            self.policy.parameters(), lr=lr)
+        self.criterion = SmoothL1Loss()
+        self.experience_replay = deque(maxlen=500_000)
+        self.batch_size = batch_size
+        self.gamma = gamma
 
         self.epsilon_start = 1.0
-        self.epsilon = 1.0
         self.epsilon_min = 0.1
-        self.epsilon_decay_steps = 200_000
+        self.epsilon = 1.0
+        self.epsilon_decay_steps = 500_000
 
-        self.train_steps = 1_000_000
-        self.learning_starts = 10_000
+        self.train_steps = train_steps
+        self.warm_up_steps = warm_up
 
         self.eval_steps = 10_000
         self.eval_episodes = 50
-        self.eval_max_steps = 500
+        self.eval_max_steps = 3000
 
         # Variables for updating the target model periodically
-        self.update_target_steps = 1000
-        self.train_policy_steps = 4
+        self.update_target_steps = update_target
+        self.train_policy_steps = update_policy
         self.steps = 0
 
         self.device = self.policy.device
         # Train metrics are averaged over this many updates before writing
         self.log_train_updates = 100
 
-        self.summary_writer = summary_writer
-        if self.summary_writer is None:
-            logger.warning(
-                "No summary writer given, training metrics will not be saved.")
+        self.summary_writer = SummaryWriter(comment=f"_lr{lr}_steps_{train_steps}")
 
     def train(self, env, model_path: str | Path):
         """Trains the policy and saves its weights.
@@ -128,8 +153,8 @@ class DQNTrainer:
         created if needed. The environment is reset afterward.
 
         Args:
-            env: The environment to train on. It must provide ``reset()``
-                and ``step(action)``.
+            env: The environment to train on, usually a ``Game``. See
+                ``run_train`` for what it must provide.
             model_path: The directory the trained model is saved to.
         """
         # Train the agent if no model is found
@@ -154,11 +179,16 @@ class DQNTrainer:
         """Picks an epsilon-greedy action and applies it to the environment.
 
         With probability ``epsilon`` a random action is taken, otherwise the
-        policy's greedy action.
+        policy's greedy action. Neither can reverse the snake's direction:
+        random actions are drawn again while ``env.is_invalid_move`` is True
+        (at most one of the four actions is a reversal, so this ends), and
+        ``Policy.get_move`` masks the reversal. Reversals therefore never
+        end a training episode.
 
         Args:
             state: The current encoded state.
-            env: The environment to step.
+            env: The environment to step. It must provide
+                ``is_invalid_move(action)`` and ``step(action)``.
 
         Returns:
             A ``(reward, new_state, action, done)`` tuple, where ``new_state``
@@ -166,6 +196,8 @@ class DQNTrainer:
         """
         if self.rng.uniform(0, 1) < self.epsilon:
             action = self.rng.randint(0, 3)
+            while env.is_invalid_move(action):
+                action = self.rng.randint(0, 3)
         else:
             action = self.policy.get_move(state)
 
@@ -177,13 +209,18 @@ class DQNTrainer:
     def run_train(self, env):
         """Runs the training loop for ``train_steps`` environment steps.
 
-        Each step plays one epsilon-greedy move, stores the transition, and
-        may run training updates and a target network sync. The episode
-        score average is logged every ``10 * update_target_steps`` steps.
+        Each step plays one epsilon-greedy move, stores the transition,
+        decays ``epsilon``, and may run a training update, a target network
+        sync and an evaluation. Episode metrics are written when an episode
+        ends, and the episode score average is logged every
+        ``10 * update_target_steps`` steps. The summary writer is closed at
+        the end.
 
         Args:
-            env: The environment to train on. It must provide ``reset()``
-                and ``step(action)``.
+            env: The environment to train on, usually a ``Game``. It must
+                provide ``reset()``, ``step(action)``,
+                ``is_invalid_move(action)``, ``step_count`` and
+                ``snake_env`` (for the episode metrics).
         """
         state = self.policy.encode_state(env.reset())
         score = []
@@ -202,7 +239,7 @@ class DQNTrainer:
 
                 # decay epsilon
                 frac = min(self.steps / self.epsilon_decay_steps, 1.0)
-                self.epsilon = self.epsilon_start + frac * (
+                self.epsilon = self.epsilon_start - frac * (
                         self.epsilon_start - self.epsilon_min)
 
                 if done:
@@ -228,7 +265,7 @@ class DQNTrainer:
                     episode_score = 0
 
                 if (
-                    self.steps > self.learning_starts and
+                    self.steps > self.warm_up_steps and
                     self.steps % self.train_policy_steps == 0
                 ):
                     for k, v in self.train_from_experience().items():
@@ -257,15 +294,11 @@ class DQNTrainer:
     def write_metrics(self, metric_dict: dict):
         """Writes scalar metrics to the summary writer at the current step.
 
-        Does nothing if there is no summary writer. The writer flushes to
-        disk on its own schedule and on ``close``.
+        The writer flushes to disk on its own schedule and on ``close``.
 
         Args:
             metric_dict: Maps TensorBoard tags to scalar values.
         """
-        if self.summary_writer is None:
-            return
-
         for k, v in metric_dict.items():
             self.summary_writer.add_scalar(k, v, self.steps)
 
@@ -302,7 +335,9 @@ class DQNTrainer:
 
         The target for each transition is
         ``reward + gamma * Q_target(next_state, argmax Q_policy(next_state))``,
-        with the future term dropped for terminal transitions.
+        with the future term dropped for terminal transitions. The argmax
+        skips the action that would reverse the snake in ``next_state``
+        (see ``Policy.reversal_mask``), the same as the greedy choice.
 
         Returns:
             A dict of ``train/`` metrics for this update: ``loss``,
@@ -323,7 +358,12 @@ class DQNTrainer:
         # Implement Double DQN
         # Use the main model to select the next actions
         with torch.no_grad():
-            next_actions = self.policy(next_states).argmax(dim=-1)
+            q_next = self.policy(next_states)
+
+            # mask reversal move
+            next_actions = q_next.masked_fill(
+                Policy.reversal_mask(next_states), float("-inf")).argmax(dim=-1)
+
             next_q_values_target = self.target_model(next_states)
             rows = torch.arange(next_states.shape[0], device=next_states.device)
             max_next_q_values = next_q_values_target[rows, next_actions]

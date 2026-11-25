@@ -11,7 +11,12 @@ from snake_ai.utils import TILE_COUNT
 
 logger = logging.getLogger(__name__)
 
-_DIR_CHANNEL_MAP = {"UP": 3, "DOWN": 4, "LEFT": 5, "RIGHT": 6}
+
+# Direction channels of the encoded state. Their order matches
+# ``snake.game.ACTIONS``, so channel ``c`` belongs to action ``c - 3``.
+_DIR_TO_CHANNEL = {"UP": 3, "DOWN": 4, "LEFT": 5, "RIGHT": 6}
+# The opposite action of each action index (UP <-> DOWN, LEFT <-> RIGHT).
+_REVERSE = [1, 0, 3, 2]
 
 
 class Policy(nn.Module):
@@ -20,6 +25,10 @@ class Policy(nn.Module):
     This is the object the server and ``DQNTrainer`` share: the trainer
     updates its weights, and the server calls ``act`` for each move. Use
     ``load_model`` to get a policy with trained weights.
+
+    Reversing the snake's direction loses the game, so the greedy choice
+    never picks it: ``get_move`` masks it with ``reversal_mask``. ``forward``
+    returns the raw, unmasked Q-values.
 
     Attributes:
         policy_model: The Q-network that scores each action.
@@ -86,24 +95,31 @@ class Policy(nn.Module):
                 ``(B, N, N, 7)``, on ``device``.
 
         Returns:
-            A tensor of shape ``(B, 4)`` with one Q-value per action.
+            A tensor of shape ``(B, 4)`` with one Q-value per action. The
+            reversal is not masked; see ``reversal_mask``.
         """
         return self.policy_model(x)
 
     def get_move(self, state):
         """Returns the greedy action for an encoded state.
 
-        The state is moved to ``device`` first.
+        The state is moved to ``device`` first. The action that would reverse
+        the snake's direction is masked, so it is never returned.
 
         Args:
             state: An encoded state of shape ``(N, N, 7)``.
 
         Returns:
-            The index of the action with the highest Q-value.
+            The index of the allowed action with the highest Q-value.
         """
         state = state.to(self.device)
         with torch.no_grad():
             q_values = self.policy_model(state)
+
+        # Mask negative direction
+        q_values = q_values.masked_fill(
+            self.reversal_mask(state).reshape(q_values.shape), float("-inf"))
+
         action = torch.argmax(q_values, dim=-1).item()
         return action
 
@@ -121,6 +137,25 @@ class Policy(nn.Module):
             An action index into ``snake.game.ACTIONS``.
         """
         return self.get_move(self.encode_state(plain_state))
+
+    @staticmethod
+    def reversal_mask(state):
+        """Marks the action that would reverse the snake's direction.
+
+        The direction is read from channels 3-6 of the encoded state, which
+        are the same on every tile. Before the first move no direction is
+        set, so nothing is masked.
+
+        Args:
+            state: An encoded state of shape ``(N, N, 7)`` or a batch of
+                shape ``(B, N, N, 7)``.
+
+        Returns:
+            A bool tensor of shape ``(4,)`` or ``(B, 4)`` in the order of
+            ``snake.game.ACTIONS``, True for the reversing action.
+        """
+        direction = state[..., 0, 0, 3:7] > 0.5
+        return direction[..., _REVERSE]
 
     @staticmethod
     def encode_state(plain_state):
@@ -162,6 +197,6 @@ class Policy(nn.Module):
         state[price_position[0], price_position[1], 2] = 1.0
 
         if snake_direction is not None:
-            state[:, :, _DIR_CHANNEL_MAP[snake_direction]] = 1
+            state[:, :, _DIR_TO_CHANNEL[snake_direction]] = 1
 
         return state

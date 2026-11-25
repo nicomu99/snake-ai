@@ -3,14 +3,18 @@
 import torch
 import torch.nn as nn
 
+from snake_ai.utils import TILE_COUNT
+
 
 class PolicyModel(nn.Module):
     """A small CNN that predicts one Q-value per action from a board state.
 
-    Two unpadded convolutions shrink a 5x5 board to a 64x3x1 feature map,
-    which is flattened and passed through two fully connected layers. The
-    ``Linear(192, 128)`` input size only works for a 5x5 board (see
-    ``utils.constants.TILE_COUNT``).
+    Two 3x3 convolutions with circular padding keep the board size, so the
+    feature map is 64 x ``TILE_COUNT`` x ``TILE_COUNT``. Circular padding
+    matches the board, which wraps at the edges. The feature map is
+    flattened and passed through two fully connected layers. The first
+    linear layer's input size is derived from ``utils.constants.TILE_COUNT``,
+    so saved weights only fit a model built with the same ``TILE_COUNT``.
 
     The four outputs are in the order of ``snake.game.ACTIONS``:
     ``UP``, ``DOWN``, ``LEFT``, ``RIGHT``.
@@ -24,12 +28,14 @@ class PolicyModel(nn.Module):
     def __init__(self, in_channels: int):
         super().__init__()
         self.sequential = nn.Sequential(
-            nn.Conv2d(in_channels, 64, kernel_size=(3, 3)),
+            nn.Conv2d(in_channels, 64, kernel_size=(3, 3),
+                      padding=1, padding_mode="circular"),
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=(3, 1)),
+            nn.Conv2d(64, 64, kernel_size=(3, 3),
+                      padding=1, padding_mode="circular"),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(192, 128),
+            nn.Linear(64 * TILE_COUNT * TILE_COUNT, 128),
             nn.ReLU(),
             nn.Linear(128, 4)
         )

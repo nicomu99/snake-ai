@@ -25,8 +25,9 @@ class Game:
     after every move and reset. Frontends (the WebSocket server, the Tk GUI)
     build on top of it.
 
-    ``Game`` also provides ``reset()`` and ``step(action)``, so it can be
-    passed to ``DQNTrainer.train`` as the training environment.
+    ``Game`` also provides ``reset()``, ``step(action)`` and
+    ``is_invalid_move(action)``, so it can be passed to
+    ``DQNTrainer.train`` as the training environment.
 
     Args:
         policy: The policy that picks moves in ``agent_step``. It can be
@@ -71,6 +72,53 @@ class Game:
         self._notify()
         return state
 
+    @staticmethod
+    def transform_move(action: int | str) -> str:
+        """Validates an action and converts it to a direction string.
+
+        This only checks that the action is a known value. It does not check
+        the game rules; see ``SnakeEnv.is_invalid_move`` for that.
+
+        Args:
+            action: A direction string (``"UP"``, ``"DOWN"``, ``"LEFT"``,
+                ``"RIGHT"``) or an index into ``ACTIONS``.
+
+        Returns:
+            The direction string.
+
+        Raises:
+            ValueError: If ``action`` is not a valid direction or index.
+        """
+        if isinstance(action, int):
+            if action < 0 or action > 3:
+                raise ValueError(
+                    "Invalid action value. Must be between 0 and 3 inclusive.")
+            direction = ACTIONS[action] if isinstance(action, int) else action
+        else:
+            if action not in ACTIONS:
+                raise ValueError(f"Invalid action value. Must be in {ACTIONS}")
+            direction = action
+        return str(direction)
+
+    def is_invalid_move(self, action: str | int):
+        """Returns whether an action would reverse the snake's direction.
+
+        A reversal loses the game, see ``SnakeEnv.is_invalid_move``. The
+        trainer uses this to keep random exploration from reversing.
+
+        Args:
+            action: A direction string or an index into ``ACTIONS``.
+
+        Returns:
+            True if the action is the opposite of the current direction.
+            Always False before the first move.
+
+        Raises:
+            ValueError: If ``action`` is not a valid direction or index.
+        """
+        direction = self.transform_move(action)
+        return self.snake_env.is_invalid_move(direction)
+
     def step(self, action):
         """Performs one move and notifies the listeners.
 
@@ -89,15 +137,7 @@ class Game:
         Raises:
             ValueError: If ``action`` is not a valid direction or index.
         """
-        if isinstance(action, int):
-            if action < 0 or action > 3:
-                raise ValueError(
-                    "Invalid action value. Must be between 0 and 3 inclusive.")
-            direction = ACTIONS[action] if isinstance(action, int) else action
-        else:
-            if action not in ACTIONS:
-                raise ValueError(f"Invalid action value. Must be in {ACTIONS}")
-            direction = action
+        direction = self.transform_move(action)
         logger.debug("Performing move into direction %s", direction)
 
         reward, state, lost, won = self.snake_env.perform_move(direction)

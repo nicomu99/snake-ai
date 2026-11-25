@@ -177,19 +177,42 @@ class SnakeEnv:
         dy = min(dy, grid_size - dy)
         return (dx * dx + dy * dy) ** 0.5
 
+    def is_invalid_move(self, direction) -> bool:
+        """Returns whether a move would reverse the snake's direction.
+
+        Reversing loses the game in ``perform_move``. It does not depend on
+        the snake's length, so a one-tile snake can't reverse either.
+
+        Args:
+            direction: ``"UP"``, ``"DOWN"``, ``"LEFT"`` or ``"RIGHT"``.
+
+        Returns:
+            True if ``direction`` is the opposite of the current direction.
+            Always False before the first move, when ``direction`` is None.
+        """
+        if (
+            self.direction == "DOWN" and direction == "UP" or
+            self.direction == "UP" and direction == "DOWN" or
+            self.direction == "LEFT" and direction == "RIGHT" or
+            self.direction == "RIGHT" and direction == "LEFT"
+        ):
+            return True
+        return False
+
     def perform_move(self, direction):
         """Moves the snake one tile and returns the shaped reward.
 
         If the game is already lost or won, nothing happens and the reward
         is 0. Otherwise, the checks run in this order:
 
-        1. Reversing the current direction loses the game (reward -10). The
-           snake does not move.
+        1. Reversing the current direction loses the game (reward -2). The
+           snake does not move. The trained policy never reverses, so this
+           only happens with other callers.
         2. Eating the food grows the snake: +100 if that wins the game,
            otherwise +20 and the score goes up by one.
         3. Running into its own body loses the game (reward -20).
         4. Otherwise +1 if the head got closer to the food (wrapped distance),
-           -1 if not, and -0.1 per step on top.
+           -1 if not, and -0.01 per step on top.
 
         Args:
             direction: ``"UP"``, ``"DOWN"``, ``"LEFT"`` or ``"RIGHT"``.
@@ -208,15 +231,10 @@ class SnakeEnv:
             raise ValueError(f"Invalid direction detected {direction}")
 
         # Check for invalid move (reversing direction)
-        if (
-            self.direction == "DOWN" and direction == "UP" or
-            self.direction == "UP" and direction == "DOWN" or
-            self.direction == "LEFT" and direction == "RIGHT" or
-            self.direction == "RIGHT" and direction == "LEFT"
-        ):
+        if self.is_invalid_move(direction):
             logger.debug("Move into direction %s invalid", direction)
             self.game_over()
-            return -10, self.get_state(), self.lost, self.won
+            return -2, self.get_state(), self.lost, self.won
 
         self.last_snake_position = copy.copy(self.snake_position[-1])
 
@@ -251,24 +269,24 @@ class SnakeEnv:
         if self.is_price_collision():
             self.score += 1
             if self.handle_collision():
-                reward = 100
+                reward = 10
                 return reward, self.get_state(), self.lost, self.won
-            reward += 20  # Increased reward for finding treasure
+            reward += 2  # Increased reward for finding treasure
             return reward, self.get_state(), self.lost, self.won
 
         # Check collision with snake (self-collision)
         if self.is_snake_collision():
             self.game_over()
-            reward -= 20  # Increased penalty for collision
+            reward -= 2  # Increased penalty for collision
             return reward, self.get_state(), self.lost, self.won
 
         # Reward for moving closer to the treasure
         if new_distance < prev_distance:
-            reward += 1  # Small positive reward
+            reward += 0.1  # Small positive reward
         else:
-            reward -= 1  # Small negative reward
+            reward -= 0.1  # Small negative reward
 
         # Small penalty per step to encourage efficiency
-        reward -= 0.1
+        reward -= 0.001
 
         return reward, self.get_state(), self.lost, self.won

@@ -11,7 +11,7 @@ A Snake game played by a Double-DQN agent (PyTorch), served to clients over a Fa
 ```bash
 uv run uvicorn snake_ai.main:main_app --reload       # run the WebSocket server
 uv run ruff check --fix src                          # lint + autofix (incl. import sorting)
-uv run python -m snake_ai.local_main --help          # local Tk GUI: --model, --train, --seed
+uv run python -m snake_ai.local_main --help          # local Tk GUI: --model, --train, --seed + training hyperparameters
 ```
 
 - There is no `[project.scripts]` entry. The ASGI app object is `snake_ai.main:main_app` (`main()` only *builds* the app).
@@ -22,7 +22,7 @@ uv run python -m snake_ai.local_main --help          # local Tk GUI: --model, --
 **Layers:** `snake/` (game rules) → `ai/` (policy + trainer) → `api/` (server sessions), with `gui/` as an alternative frontend. `ai/` takes paths as arguments and does not read settings; the entry points (`local_main.py`, `main.py`) call `get_settings()` and pass paths down. Each entry point calls `configure_logging()` once.
 
 - Game rules: the board wraps at the edges (a torus), and reversing direction counts as a loss. `direction` is `None` before the first move. "price" means food/treasure throughout the code.
-- **`ai/policy_model.py` hard-codes `Linear(192, …)` for a 5×5 board. Changing `TILE_COUNT` (`utils/constants.py`) or the number of input channels breaks the model and makes the saved `.pt` files incompatible.** `frontend/src/config.ts` `BOARD_SIZE` must match `TILE_COUNT`.
+- **`ai/policy_model.py` sizes its first `Linear` layer from `TILE_COUNT` (`utils/constants.py`). Changing `TILE_COUNT`, the number of input channels or the layers makes saved `.pt` files incompatible.** `frontend/src/config.ts` `BOARD_SIZE` must match `TILE_COUNT`.
 - Model catalog (`<model_path>/models.json`): missing model files are skipped with a warning, but startup fails if the `default_model` can't be loaded. Policies are shared, inference-only, one per model.
 - `frontend/src/protocol.ts` mirrors the server's message types — keep it in sync with `api/`.
 

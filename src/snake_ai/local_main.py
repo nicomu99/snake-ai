@@ -11,6 +11,7 @@ root), so this works from any working directory::
 """
 
 import argparse
+import copy
 
 import torch
 
@@ -20,7 +21,7 @@ from snake_ai.snake import Game
 from snake_ai.utils import configure_logging, get_settings
 
 
-def main(train: bool, model_file: str, seed: int):
+def main(train: bool, model_file: str, seed: int, **kwargs):
     """Sets up logging, prepares a policy and opens the Tk GUI.
 
     With ``train``, a fresh policy is trained with ``DQNTrainer`` on a
@@ -35,6 +36,10 @@ def main(train: bool, model_file: str, seed: int):
             absolute path is used as is. Ignored when ``train`` is set.
         seed: Seeds torch, the game's food placement and, with ``train``, the
             trainer's exploration, so that runs are reproducible.
+        **kwargs: Hyperparameters passed on to ``DQNTrainer`` (``lr``,
+            ``warm_up``, ``train_steps``, ``gamma``, ``batch_size``,
+            ``update_target``, ``update_policy``). Ignored when ``train``
+            is not set.
 
     Raises:
         FileNotFoundError: If ``train`` is not set and the model file does
@@ -55,7 +60,7 @@ def main(train: bool, model_file: str, seed: int):
     game.reset(seed=seed)
 
     if train:
-        agent = DQNTrainer(policy, seed=seed)
+        agent = DQNTrainer(policy, seed=seed, **kwargs)
         agent.train(game, model_path=settings.model_path)
 
     Controller(game, View()).run()
@@ -94,6 +99,73 @@ if __name__ == '__main__':
         )
     )
 
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=0.0001,
+        help=(
+            "Learning rate parameter of the optimizer (default: %(default)s)"
+        )
+    )
+
+    parser.add_argument(
+        "--warm-up",
+        type=int,
+        default=10_000,
+        help=(
+            "Number of steps before training starts (default: %(default)s)"
+        )
+    )
+
+    parser.add_argument(
+        "--train-steps",
+        type=int,
+        default=3_000_000,
+        help=(
+            "Number of training steps (default: %(default)s)"
+        )
+    )
+
+    parser.add_argument(
+        "--gamma",
+        type=float,
+        default=0.99,
+        help=(
+            "Future reward penalty (default: %(default)s)"
+        )
+    )
+
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        help=(
+            "Training batch size (default: %(default)s)"
+        )
+    )
+
+    parser.add_argument(
+        "--update-target",
+        type=int,
+        default=1_000,
+        help=(
+            "Number of steps between target network updates (default: %(default)s)"
+        )
+    )
+
+    parser.add_argument(
+        "--update-policy",
+        type=int,
+        default=4,
+        help=(
+            "Number of steps between policy network updates (default: %(default)s)"
+        )
+    )
+
     args = parser.parse_args()
 
-    main(train=args.train, model_file=args.model, seed=args.seed)
+    training_args = copy.deepcopy(vars(args))
+    del training_args["train"]
+    del training_args["model"]
+    del training_args["seed"]
+    main(train=args.train, model_file=args.model, seed=args.seed, **training_args)
