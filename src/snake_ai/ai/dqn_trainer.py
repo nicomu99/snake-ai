@@ -18,6 +18,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 
 from snake_ai.ai.evaluate import evaluate
 from snake_ai.ai.policy import Policy
+from snake_ai.utils import TILE_COUNT
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +45,19 @@ class DQNTrainer:
         optimizer: Adam optimizer for the policy network.
         criterion: Smooth L1 (Huber) loss between predicted and target
             Q-values. It is less sensitive to large TD errors than MSE.
-        experience_replay: A bounded buffer of
-            ``(state, action, reward, next_state, done)`` transitions.
+        cap: The capacity of the replay buffer, in transitions. Once it is
+            full, the oldest transition is overwritten.
+        states: The replay buffer's encoded states before each action, a
+            ``uint8`` tensor of shape ``(cap, N, N, 7)`` on ``device``. The
+            encoded states only hold 0s and 1s, so ``uint8`` is lossless.
+        next_states: The encoded states after each action, laid out like
+            ``states``.
+        actions: The action index of each transition, a ``long`` tensor of
+            shape ``(cap,)`` on ``device``.
+        rewards: The reward of each transition, a ``float32`` tensor of
+            shape ``(cap,)`` on ``device``.
+        dones: 1.0 where the transition ended the episode, otherwise 0.0, a
+            ``float32`` tensor of shape ``(cap,)`` on ``device``.
         batch_size: The number of transitions per training update.
         epsilon: The current probability of taking a random action. It
             decays linearly from ``epsilon_start`` to ``epsilon_min`` over
@@ -62,15 +74,18 @@ class DQNTrainer:
         train_policy_steps: How often (in steps) the gated training update
             runs once ``warm_up_steps`` is reached.
         eval_steps: How often (in steps) the policy is evaluated with
-            ``evaluate``.
+            ``evaluate`` and a checkpoint is saved.
         eval_episodes: The number of games per evaluation.
         eval_max_steps: The step cap per evaluation game.
         steps: The number of environment steps taken so far.
         device: The device of ``policy``.
         log_train_updates: The number of training updates whose metrics are
-            averaged before they are written.
+            averaged before they are written. ``train/grad_norm`` is the
+            exception: it is measured only on the last of these updates.
+        model_id: The ``_lr<lr>_g<gamma>`` suffix used in the TensorBoard
+            run name and in saved model file names.
         summary_writer: The TensorBoard writer that metrics are written to.
-            It writes to ``runs/<date>_<host>_lr<lr>_steps_<train_steps>``
+            It writes to ``runs/<%b%d_%H-%M-%S>_<host>_lr<lr>_g<gamma>``
             relative to the current working directory.
     """
 
@@ -98,7 +113,7 @@ class DQNTrainer:
                 before training updates begin. Defaults to 10_000.
             train_steps: The total number of environment steps to train
                 for. Defaults to 1_000_000.
-            gamma: The discount factor for future rewards. Defaults to 0.95.
+            gamma: The discount factor for future rewards. Defaults to 0.99.
             batch_size: The number of transitions per training update.
                 Defaults to 256.
             update_target: How often (in steps) the target network is
@@ -115,12 +130,22 @@ class DQNTrainer:
         self.target_model.requires_grad_(False)
         self.target_model.eval()
 
+        self.device = self.policy.device
         self.optimizer = Adam(
             self.policy.parameters(), lr=lr)
         self.criterion = SmoothL1Loss()
-        self.experience_replay = deque(maxlen=500_000)
         self.batch_size = batch_size
         self.gamma = gamma
+
+        # ring buffers
+        self.cap = 500_000
+        self.states = torch.zeros((self.cap, TILE_COUNT, TILE_COUNT, 7),
+                                  dtype=torch.uint8, device=self.device)
+        self.next_states = torch.zeros((self.cap, TILE_COUNT, TILE_COUNT, 7),
+                                       dtype=torch.uint8, device=self.device)
+        self.actions = torch.zeros(self.cap, device=self.device, dtype=torch.long)
+        self.rewards = torch.zeros(self.cap, device=self.device)
+        self.dones = torch.zeros(self.cap, device=self.device)
 
         self.epsilon_start = 1.0
         self.epsilon_min = 0.1
@@ -130,7 +155,7 @@ class DQNTrainer:
         self.train_steps = train_steps
         self.warm_up_steps = warm_up
 
-        self.eval_steps = 10_000
+        self.eval_steps = 100_000
         self.eval_episodes = 50
         self.eval_max_steps = 3000
 
@@ -139,39 +164,54 @@ class DQNTrainer:
         self.train_policy_steps = update_policy
         self.steps = 0
 
-        self.device = self.policy.device
         # Train metrics are averaged over this many updates before writing
         self.log_train_updates = 100
 
-        self.model_id = f"_lr{lr}_s{train_steps}_g{gamma}"
+        self.timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+        self.model_id = f"_lr{lr}_g{gamma}"
         self.summary_writer = SummaryWriter(comment=self.model_id)
 
     def train(self, env, model_path: str | Path):
         """Trains the policy and saves its weights.
 
-        Runs ``run_train`` and then saves the policy's state dict to
-        ``model_path / "<timestamp>_model_<train_steps>.pt"``, with the
-        timestamp formatted as ``%Y-%m-%d_%H:%M:%S``. The directory is
-        created if needed. The environment is reset afterward.
+        Runs ``run_train``, which also saves a checkpoint after every
+        evaluation, and then saves the final policy with ``_save_model``.
+        The environment is reset afterward.
 
         Args:
             env: The environment to train on, usually a ``Game``. See
                 ``run_train`` for what it must provide.
-            model_path: The directory the trained model is saved to.
+            model_path: The directory the checkpoints and the trained model
+                are saved to.
         """
         # Train the agent if no model is found
         logger.info("Starting agent training")
-        self.run_train(env)
+        self.run_train(env, model_path)
 
         logger.info("Finished training agent")
 
         # Save the trained model
+        if not self.steps % self.eval_steps == 0:
+            # skipped if it was already saved in run_train
+            self._save_model(model_path)
+        env.reset()
+
+    def _save_model(self, model_path: str | Path):
+        """Saves the policy's state dict at the current step.
+
+        The file is ``model_path / "<timestamp>_model_<model_id>_s<steps>.pt"``,
+        e.g. ``2026-11-25_14:00:08_model__lr0.0005_g0.99_s500000.pt``, with
+        the timestamp formatted as ``%Y-%m-%d_%H:%M:%S``. The directory is
+        created if needed. It can be loaded with ``Policy.load_model``.
+
+        Args:
+            model_path: The directory the model is saved to.
+        """
         model_path = Path(model_path)
         model_path.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-        model_file = model_path / f"{timestamp}_model_{self.model_id}.pt"
+        model_file = (model_path /
+                      f"{self.timestamp}_model{self.model_id}_s{self.steps}.pt")
         torch.save(self.policy.state_dict(), model_file)
-        env.reset()
 
     def update_target_model(self):
         """Copies the policy network's weights into the target network."""
@@ -205,16 +245,20 @@ class DQNTrainer:
 
         reward, new_state, lost, won = env.step(action)
         new_state = self.policy.encode_state(new_state)
-
         return reward, new_state, action, lost or won
 
-    def run_train(self, env):
+    def run_train(self, env, model_path: str | Path):
         """Runs the training loop for ``train_steps`` environment steps.
 
         Each step plays one epsilon-greedy move, stores the transition,
         decays ``epsilon``, and may run a training update, a target network
-        sync and an evaluation. Episode metrics are written when an episode
-        ends, and the episode score average is logged every
+        sync and an evaluation. Every evaluation is followed by a checkpoint
+        saved with ``_save_model``. Episode metrics are written when an
+        episode ends. The training metrics stay on ``device`` and are
+        averaged and written every ``log_train_updates`` updates, which is
+        the only point where they wait for the GPU. ``train/grad_norm`` is
+        measured then, from the gradients of the last update. The episode
+        score average is logged every
         ``10 * update_target_steps`` steps. The summary writer is closed at
         the end.
 
@@ -223,6 +267,7 @@ class DQNTrainer:
                 provide ``reset()``, ``step(action)``,
                 ``is_invalid_move(action)``, ``step_count`` and
                 ``snake_env`` (for the episode metrics).
+            model_path: The directory the checkpoints are saved to.
         """
         state = self.policy.encode_state(env.reset())
         score = []
@@ -233,7 +278,6 @@ class DQNTrainer:
         with logging_redirect_tqdm():
             for _ in tqdm(range(self.train_steps), desc="train"):
                 reward, next_state, action, done = self.play_one_step(state, env)
-
                 self.store_experience(state, action, reward, next_state, done)
                 state = next_state
                 self.steps += 1
@@ -257,7 +301,7 @@ class DQNTrainer:
                         "episode/win_rate": counts["game_won"] / n,
                         "episode/collision_rate": counts["collision"] / n,
                         "episode/reversal_rate": counts["direction_reversal"] / n,
-                        "replay/size": len(self.experience_replay),
+                        "replay/size": min(self.steps, self.cap),
                         "explore/epsilon": self.epsilon,
                     }
                     self.write_metrics(episode_dict)
@@ -273,8 +317,15 @@ class DQNTrainer:
                     for k, v in self.train_from_experience().items():
                         train_metrics[k].append(v)
                     if len(train_metrics["train/loss"]) >= self.log_train_updates:
-                        self.write_metrics(
-                            {k: sum(v) / len(v) for k, v in train_metrics.items()})
+                        metrics = {k: torch.stack(v).mean()
+                                   for k, v in train_metrics.items()}
+                        # An infinite max norm only measures the norm, it doesn't clip
+                        grad_norm = clip_grad_norm_(
+                            self.policy.parameters(), float("inf")
+                        )
+                        metrics["train/grad_norm"] = grad_norm
+                        metrics = {k: v.item() for k, v in metrics.items()}
+                        self.write_metrics(metrics)
                         train_metrics.clear()
 
                 if self.steps % self.update_target_steps == 0:
@@ -294,6 +345,7 @@ class DQNTrainer:
                     logger.info("Evaluation took %.1fs",
                                 time.perf_counter() - eval_start)
                     self.write_metrics(eval_metrics)
+                    self._save_model(model_path)
         if self.summary_writer is not None:
             self.summary_writer.close()
 
@@ -309,9 +361,12 @@ class DQNTrainer:
             self.summary_writer.add_scalar(k, v, self.steps)
 
     def store_experience(self, state, action, reward, next_state, done):
-        """Adds one transition to the replay buffer.
+        """Writes one transition into the replay buffer.
 
-        The oldest transition is dropped once the buffer is full.
+        The slot is ``steps % cap``, so the buffer fills from slot 0 and,
+        once full, overwrites the oldest transition. This relies on
+        ``run_train`` calling it before it increments ``steps``. The values
+        are copied to ``device``, and the states are stored as ``uint8``.
 
         Args:
             state: The encoded state before the action, shape ``(N, N, 7)``.
@@ -320,21 +375,12 @@ class DQNTrainer:
             next_state: The encoded state after the action.
             done: Whether the episode ended with this action.
         """
-        # state is a (n, n, 7) tensor; same as next_state
-        # action is a single int
-        # reward is a single int
-        # done is boolean
-        self.experience_replay.append((state, action, reward, next_state, done))
-
-    def sample_experience(self):
-        """Draws a random batch of transitions without replacement.
-
-        Returns:
-            A list of up to ``batch_size`` transition tuples.
-        """
-        indices = torch.randperm(len(self.experience_replay))[:self.batch_size].tolist()
-        batch = [self.experience_replay[i] for i in indices]
-        return batch
+        next_pos = self.steps % self.cap
+        self.states[next_pos] = state
+        self.next_states[next_pos] = next_state
+        self.actions[next_pos] = action
+        self.rewards[next_pos] = reward
+        self.dones[next_pos] = done
 
     def train_from_experience(self) -> dict:
         """Runs one Double DQN gradient update on a sampled batch.
@@ -345,21 +391,26 @@ class DQNTrainer:
         skips the action that would reverse the snake in ``next_state``
         (see ``Policy.reversal_mask``), the same as the greedy choice.
 
+        The batch is drawn uniformly, with replacement, from the filled part
+        of the replay buffer, and stays on ``device``.
+
         Returns:
             A dict of ``train/`` metrics for this update: ``loss``,
-            ``grad_norm`` (the total gradient norm before the optimizer
-            step), ``q_mean`` and ``q_max`` (of the predicted Q-values of the
-            taken actions) and ``target_q_mean``.
+            ``q_mean`` and ``q_max`` (of the predicted Q-values of the taken
+            actions) and ``target_q_mean``. The values are detached 0-dim
+            tensors on ``device``, so building the dict doesn't wait for the
+            GPU. ``train/grad_norm`` is not included; ``run_train`` measures
+            it when it writes the metrics.
         """
-        batch = self.sample_experience()
-        states, actions, rewards, next_states, dones = zip(*batch, strict=False)
 
-        states = torch.stack(states).to(device=self.device)
-        next_states = torch.stack(next_states).to(device=self.device)
-
-        actions = torch.tensor(actions, dtype=torch.long, device=self.device)
-        rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device)
-        dones = torch.tensor(dones, dtype=torch.float32, device=self.device)
+        # sample new batch
+        idx = torch.randint(min(self.steps, self.cap), (self.batch_size,),
+                            device=self.device)
+        states = self.states[idx].float()
+        actions = self.actions[idx]
+        rewards = self.rewards[idx]
+        next_states = self.next_states[idx].float()
+        dones = self.dones[idx]
 
         # Implement Double DQN
         # Use the main model to select the next actions
@@ -383,15 +434,12 @@ class DQNTrainer:
         self.optimizer.zero_grad()
         loss = self.criterion(predicted_q_values, target_q_values)
         loss.backward()
-        # An infinite max norm only measures the norm, it doesn't clip
-        grad_norm = clip_grad_norm_(self.policy.parameters(), float("inf"))
 
         metrics_dict = {
-            "train/loss": loss.item(),
-            "train/grad_norm": grad_norm.item(),
-            "train/q_mean": predicted_q_values.mean().item(),
-            "train/q_max": predicted_q_values.max().item(),
-            "train/target_q_mean": target_q_values.mean().item(),
+            "train/loss": loss.detach(),
+            "train/q_mean": predicted_q_values.detach().mean(),
+            "train/q_max": predicted_q_values.detach().max(),
+            "train/target_q_mean": target_q_values.detach().mean(),
         }
 
         self.optimizer.step()

@@ -72,7 +72,7 @@ uv run python -m snake_ai.local_main [--model FILE] [--train] [--seed N]
 | Flag | Default | Effect |
 |---|---|---|
 | `--model FILE` | `dqn-1m.pt` | Model to play with: a file name in the model directory (`policy_models/`), or an absolute path |
-| `--train` | off | Train a new policy first, save it as `<timestamp>_model_<steps>.pt` in the model directory, then play with it |
+| `--train` | off | Train a new policy first, save a checkpoint every 100k steps and the final model as `<timestamp>_model__lr<lr>_g<gamma>_s<steps>.pt` in the model directory, then play with it |
 | `--seed N` | `42` | Seed for torch, the food placement and training, so runs are reproducible |
 
 Examples:
@@ -163,11 +163,6 @@ Within each category, bugs come first, then unfinished features, then cleanup.
 
 ### Agent & training
 
-- [ ] 🔴 Make the policy network work on any board size. Right now `Linear(192, …)` in `ai/policy_model.py` only fits a 5×5 board (`64 channels × 3 × 1` after the two unpadded convs). One approach:
-  - Use `padding="same", padding_mode="circular"` in the conv layers. Because the board wraps, this matches the game rules, and it keeps the spatial size unchanged.
-  - Add a global pooling layer (e.g. `nn.AdaptiveMaxPool2d(1)`) before the `Linear` layers, so their input size no longer depends on the board.
-  - On a torus only relative positions matter, so pooling loses no important information, as long as the convs' receptive field covers the board. Bigger boards need more layers or dilated convs.
-  - The existing `.pt` files won't load into the new architecture, so this needs retraining (which depends on the training fixes above). A model trained on one size might also need fine-tuning before it plays well on another.
 - [ ] 🔴 Train more agents, and ideally better ones.
   - Make the hyperparameters configurable (CLI flags or a config file) instead of hard-coding them in `DQNTrainer.__init__`, and save them next to each `.pt` file, so runs can be reproduced and compared.
   - Ideas to try: longer runs, different epsilon schedules, prioritized replay, a dueling network head, n-step returns.

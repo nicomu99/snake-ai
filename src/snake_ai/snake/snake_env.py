@@ -1,6 +1,5 @@
 """The Snake game rules, including reward shaping for training."""
 
-import copy
 import logging
 from random import Random
 
@@ -152,8 +151,8 @@ class SnakeEnv:
             A ``(snake_position, price_position, direction)`` tuple.
         """
         return (
-            copy.deepcopy(self.snake_position),
-            copy.deepcopy(self.price_position),
+            list(self.snake_position),
+            list(self.price_position),
             self.direction,
         )
 
@@ -236,14 +235,14 @@ class SnakeEnv:
             self.game_over()
             return -2, self.get_state(), self.lost, self.won
 
-        self.last_snake_position = copy.copy(self.snake_position[-1])
+        self.last_snake_position = list(self.snake_position[-1])
 
         # Previous head position
-        prev_head_pos = copy.deepcopy(self.snake_position[0])
+        prev_head_pos = list(self.snake_position[0])
 
         # Update the snake's body
         for i in range(len(self.snake_position) - 1, 0, -1):
-            self.snake_position[i] = copy.deepcopy(self.snake_position[i - 1])
+            self.snake_position[i] = list(self.snake_position[i - 1])
 
         # Update snake's head position
         self.direction = direction

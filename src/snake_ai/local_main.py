@@ -25,8 +25,9 @@ def main(train: bool, model_file: str, seed: int, **kwargs):
     """Sets up logging, prepares a policy and opens the Tk GUI.
 
     With ``train``, a fresh policy is trained with ``DQNTrainer`` on a
-    headless ``Game`` and saved to a timestamped file in the model
-    directory (``Settings.model_path``). Otherwise, the weights are loaded
+    headless ``Game``. Checkpoints after each evaluation and the final
+    model are saved to timestamped files in the model directory
+    (``Settings.model_path``). Otherwise, the weights are loaded
     from ``model_file``. Either way, the GUI then plays with the resulting
     policy.
 
