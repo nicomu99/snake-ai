@@ -28,8 +28,9 @@ def evaluate(
         max_steps: The step cap per game. A game that reaches it without
             ending counts as a timeout. Defaults to 500.
         seed: The seed of the first game. Defaults to 10.
-        progress: Whether to show a progress bar. Defaults to False, so it
-            doesn't clutter the trainer's own progress bar.
+        progress: Whether to show a progress bar. Defaults to False. When
+            another bar is open (e.g. the trainer's), it is drawn below it
+            and cleared once the evaluation finishes.
 
     Returns:
         A dict of metrics, keyed with an ``eval/`` prefix:
@@ -60,7 +61,10 @@ def evaluate(
     score_list = []
     win, collision, reversal, timeout, total_steps = 0, 0, 0, 0, 0
     try:
-        for episode in tqdm(range(n_episodes), disable=not progress):
+        # leave=None keeps the bar only when it's the outermost one, so a
+        # nested eval bar under the trainer's bar is cleared when done.
+        for episode in tqdm(range(n_episodes), desc="eval", leave=None,
+                            disable=not progress):
             game.reset(seed=seed + episode)
             while not game.game_finished and game.step_count < max_steps:
                 action = policy.act(game.snake_env.get_state())

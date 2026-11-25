@@ -2,6 +2,7 @@
 
 import copy
 import logging
+import time
 from collections import Counter, defaultdict, deque
 from datetime import datetime
 from pathlib import Path
@@ -229,7 +230,7 @@ class DQNTrainer:
         recent_outcomes = deque(maxlen=100)
         train_metrics = defaultdict(list)
         with logging_redirect_tqdm():
-            for _ in tqdm(range(self.train_steps)):
+            for _ in tqdm(range(self.train_steps), desc="train"):
                 reward, next_state, action, done = self.play_one_step(state, env)
 
                 self.store_experience(state, action, reward, next_state, done)
@@ -285,8 +286,12 @@ class DQNTrainer:
                     )
 
                 if self.steps % self.eval_steps == 0:
+                    eval_start = time.perf_counter()
                     eval_metrics = evaluate(
-                        self.policy, self.eval_episodes, self.eval_max_steps)
+                        self.policy, self.eval_episodes, self.eval_max_steps,
+                        progress=True)
+                    logger.info("Evaluation took %.1fs",
+                                time.perf_counter() - eval_start)
                     self.write_metrics(eval_metrics)
         if self.summary_writer is not None:
             self.summary_writer.close()
