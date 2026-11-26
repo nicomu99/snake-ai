@@ -46,6 +46,7 @@ class SnakeEnv:
         self.won = False
         self.score = 0
         self.price_position = None
+        self.step_count = 0
 
         self.reset()
 
@@ -68,6 +69,7 @@ class SnakeEnv:
         self.lost = False
         self.won = False
         self.score = 0
+        self.step_count = 0
 
         self._generate_price()
 
@@ -229,6 +231,8 @@ class SnakeEnv:
         if direction not in ["DOWN", "UP", "LEFT", "RIGHT"]:
             raise ValueError(f"Invalid direction detected {direction}")
 
+        self.step_count += 1
+
         # Check for invalid move (reversing direction)
         if self.is_invalid_move(direction):
             logger.debug("Move into direction %s invalid", direction)
@@ -257,10 +261,6 @@ class SnakeEnv:
         elif direction == "RIGHT":
             head_pos[0] = (head_pos[0] + 1) % TILE_COUNT
 
-        # Calculate Euclidean distances to the treasure
-        prev_distance = self.get_wrapped_distance(prev_head_pos, self.price_position)
-        new_distance = self.get_wrapped_distance(head_pos, self.price_position)
-
         # Initialize reward
         reward = 0
 
@@ -280,6 +280,8 @@ class SnakeEnv:
             return reward, self.get_state(), self.lost, self.won
 
         # # Reward for moving closer to the treasure
+        # prev_distance = self.get_wrapped_distance(prev_head_pos, self.price_position)
+        # new_distance = self.get_wrapped_distance(head_pos, self.price_position)
         # if new_distance < prev_distance:
         #     reward += 0.01  # Small positive reward
         # else:

@@ -3,7 +3,7 @@
 import logging
 
 from snake_ai.gui.view import View
-from snake_ai.snake import Game
+from snake_ai.session import Game
 
 logger = logging.getLogger(__name__)
 

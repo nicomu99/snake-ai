@@ -17,7 +17,7 @@ import torch
 
 from snake_ai.ai import DQNTrainer, Policy
 from snake_ai.gui import Controller, View
-from snake_ai.snake import Game
+from snake_ai.session import Game
 from snake_ai.utils import configure_logging, get_settings
 
 

@@ -4,7 +4,9 @@ import numpy as np
 from tqdm import tqdm
 
 from snake_ai.ai.policy import Policy
-from snake_ai.snake import Game
+from snake_ai.snake import SnakeEnv
+
+ACTIONS = ("UP", "DOWN", "LEFT", "RIGHT")
 
 
 def evaluate(
@@ -56,7 +58,7 @@ def evaluate(
 
     was_training = policy.training
     policy.eval()
-    game = Game(policy)
+    snake_env = SnakeEnv()
 
     score_list = []
     win, collision, reversal, timeout, total_steps = 0, 0, 0, 0, 0
@@ -65,15 +67,20 @@ def evaluate(
         # nested eval bar under the trainer's bar is cleared when done.
         for episode in tqdm(range(n_episodes), desc="eval", leave=None,
                             disable=not progress):
-            game.reset(seed=seed + episode)
-            while not game.game_finished and game.step_count < max_steps:
-                action = policy.act(game.snake_env.get_state())
-                game.step(action)
+            snake_env.reset(seed=seed + episode)
+            while (
+                    not snake_env.lost and
+                    not snake_env.won and
+                    snake_env.step_count < max_steps
+            ):
+                action = policy.act(snake_env.get_state())
+                action = ACTIONS[action]
+                snake_env.perform_move(action)
 
-            score_list.append(game.snake_env.score)
-            total_steps += game.step_count
+            score_list.append(snake_env.score)
+            total_steps += snake_env.step_count
 
-            env_state = game.snake_env.get_game_state()
+            env_state = snake_env.get_game_state()
             if env_state == "game_won":
                 win += 1
             elif env_state == "collision":

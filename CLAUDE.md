@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A Snake game played by a Double-DQN agent (PyTorch), served to clients over a FastAPI WebSocket. There is also a legacy local Tkinter GUI. Managed with `uv` (`src/` layout, package `snake_ai`). There are no tests yet.
+A Snake game played by a Double-DQN agent (PyTorch), served to clients over a FastAPI WebSocket. There is also a legacy local Tkinter GUI. Managed with `uv` (`src/` layout, package `snake_ai`). Tests use pytest and live in `tests/`.
 
 ## Commands
 
 ```bash
 uv run uvicorn snake_ai.main:main_app --reload       # run the WebSocket server
+uv run pytest                                        # run the tests
 uv run ruff check --fix src                          # lint + autofix (incl. import sorting)
 uv run python -m snake_ai.local_main --help          # local Tk GUI: --model, --train, --seed + training hyperparameters
 ```
@@ -19,8 +20,9 @@ uv run python -m snake_ai.local_main --help          # local Tk GUI: --model, --
 
 ## Architecture
 
-**Layers:** `snake/` (game rules) → `ai/` (policy + trainer) → `api/` (server sessions), with `gui/` as an alternative frontend. `ai/` takes paths as arguments and does not read settings; the entry points (`local_main.py`, `main.py`) call `get_settings()` and pass paths down. Each entry point calls `configure_logging()` once.
+**Layers:** `snake/` (game rules: `SnakeEnv`) → `ai/` (policy + trainer) → `session/` (`Game`: env + policy + listeners) → `api/` (server sessions), with `gui/` as an alternative frontend. Imports only point down this chain; `snake/` must not import from `ai/` (that caused a circular import before). `ai/evaluate.py` drives `SnakeEnv` directly rather than `Game`. `ai/` takes paths as arguments and does not read settings; the entry points (`local_main.py`, `main.py`) call `get_settings()` and pass paths down. Each entry point calls `configure_logging()` once.
 
+- `ACTIONS` (action index → direction) is defined in both `session/game.py` and `ai/evaluate.py`; both must keep the order `UP, DOWN, LEFT, RIGHT`, which is the order of the model's outputs. `step_count` is likewise tracked by both `Game` and `SnakeEnv`.
 - Game rules: the board wraps at the edges (a torus), and reversing direction counts as a loss. `direction` is `None` before the first move. "price" means food/treasure throughout the code.
 - **`ai/policy_model.py` sizes its first `Linear` layer from `TILE_COUNT` (`utils/constants.py`). Changing `TILE_COUNT`, the number of input channels or the layers makes saved `.pt` files incompatible.** `frontend/src/config.ts` `BOARD_SIZE` must match `TILE_COUNT`.
 - Model catalog (`<model_path>/models.json`): missing model files are skipped with a warning, but startup fails if the `default_model` can't be loaded. Policies are shared, inference-only, one per model.

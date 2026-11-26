@@ -9,7 +9,7 @@ from snake_ai.ai import PolicySelector
 from snake_ai.api.command_message import Pause, Reset, Resume, SetModel, Speed, Start
 from snake_ai.api.errors import InvalidCommandError
 from snake_ai.api.web_socket_sink import WebSocketSink
-from snake_ai.snake import Game
+from snake_ai.session import Game
 
 logger = logging.getLogger(__name__)
 
