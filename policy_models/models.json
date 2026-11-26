@@ -1,18 +1,32 @@
 {
-  "default_model": "dqn-200k",
+  "default_model": "dqn-800k-v2",
   "models": [
     {
-      "id": "dqn-200k",
-      "name": "DQN, 200k steps",
-      "uri": "dqn-200k.pt",
-      "tile_count": 5,
+      "id": "dqn-400k-v2",
+      "name": "DQNv2, 400k steps",
+      "uri": "dqn-400k-v2.pt",
+      "tile_count": 8,
       "in_channels": 7
     },
     {
-      "id": "dqn-1m",
-      "name": "DQN, 1M steps",
-      "uri": "dqn-1m.pt",
-      "tile_count": 5,
+      "id": "dqn-800k-v2",
+      "name": "DQNv2, 800k steps",
+      "uri": "dqn-800k-v2.pt",
+      "tile_count": 8,
+      "in_channels": 7
+    },
+    {
+      "id": "dqn-1600k-v2",
+      "name": "DQNv2, 1600k steps",
+      "uri": "dqn-1600k-v2.pt",
+      "tile_count": 8,
+      "in_channels": 7
+    },
+    {
+      "id": "dqn-3200k-v2",
+      "name": "DQNv2, 3200k steps",
+      "uri": "dqn-3200k-v2.pt",
+      "tile_count": 8,
       "in_channels": 7
     }
   ]

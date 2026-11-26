@@ -15,7 +15,7 @@ spec:
         app: backend
     spec:
       containers:
-      - image: muellern99/snake-ai-backend:1.0.1
+      - image: muellern99/snake-ai-backend:1.0.2
         imagePullPolicy: IfNotPresent
         name: backend
         ports:

@@ -33,8 +33,8 @@ class Controller:
     """
 
     KEY_DIRECTIONS = {"w": "UP", "s": "DOWN", "a": "LEFT", "d": "RIGHT"}
-    AGENT_STEPS = 5
-    AGENT_DELAY_MS = 100
+    AGENT_STEPS = 50
+    AGENT_DELAY_MS = 60
 
     def __init__(self, game: Game, view: View):
         self.game = game

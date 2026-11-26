@@ -82,7 +82,7 @@ if __name__ == '__main__':
     parser.add_argument(
         "--model",
         type=str,
-        default="dqn-1m.pt",
+        default="dqn-800k-v2.pt",
         metavar="FILE",
         help=(
             "Model file in the model directory, or an absolute path "
