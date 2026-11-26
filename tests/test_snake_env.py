@@ -195,7 +195,6 @@ def test_wrapped_distance(a, b, expected):
     assert SnakeEnv.get_wrapped_distance(a, b) == pytest.approx(expected)
 
 
-@pytest.mark.xfail(reason="get_state only copies the outer list; head is shared")
 def test_get_state_is_not_changed_by_later_moves(env):
     env.price_position = FAR_AWAY
     snake, _, _ = env.get_state()

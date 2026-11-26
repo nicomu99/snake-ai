@@ -1,5 +1,5 @@
 """The Snake game rules, including reward shaping for training."""
-
+import copy
 import logging
 from random import Random
 
@@ -153,7 +153,7 @@ class SnakeEnv:
             A ``(snake_position, price_position, direction)`` tuple.
         """
         return (
-            list(self.snake_position),
+            copy.deepcopy(self.snake_position),
             list(self.price_position),
             self.direction,
         )
@@ -241,9 +241,6 @@ class SnakeEnv:
 
         self.last_snake_position = list(self.snake_position[-1])
 
-        # Previous head position
-        prev_head_pos = list(self.snake_position[0])
-
         # Update the snake's body
         for i in range(len(self.snake_position) - 1, 0, -1):
             self.snake_position[i] = list(self.snake_position[i - 1])
@@ -251,7 +248,6 @@ class SnakeEnv:
         # Update snake's head position
         self.direction = direction
         head_pos = self.snake_position[0]
-
         if direction == "DOWN":
             head_pos[1] = (head_pos[1] + 1) % TILE_COUNT
         elif direction == "UP":
@@ -280,6 +276,8 @@ class SnakeEnv:
             return reward, self.get_state(), self.lost, self.won
 
         # # Reward for moving closer to the treasure
+        # Previous head position
+        # prev_head_pos = list(self.snake_position[0])
         # prev_distance = self.get_wrapped_distance(prev_head_pos, self.price_position)
         # new_distance = self.get_wrapped_distance(head_pos, self.price_position)
         # if new_distance < prev_distance:
