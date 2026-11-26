@@ -207,11 +207,11 @@ class SnakeEnv:
         1. Reversing the current direction loses the game (reward -2). The
            snake does not move. The trained policy never reverses, so this
            only happens with other callers.
-        2. Eating the food grows the snake: +100 if that wins the game,
-           otherwise +20 and the score goes up by one.
-        3. Running into its own body loses the game (reward -20).
-        4. Otherwise +1 if the head got closer to the food (wrapped distance),
-           -1 if not, and -0.01 per step on top.
+        2. Eating the food grows the snake and raises the score by one:
+           +10 if that wins the game, otherwise +2.
+        3. Running into its own body loses the game (reward -2).
+        4. Otherwise +0.01 if the head got closer to the food (wrapped
+           distance), -0.01 if not, and -0.001 per step on top.
 
         Args:
             direction: ``"UP"``, ``"DOWN"``, ``"LEFT"`` or ``"RIGHT"``.
@@ -279,11 +279,11 @@ class SnakeEnv:
             reward -= 2  # Increased penalty for collision
             return reward, self.get_state(), self.lost, self.won
 
-        # Reward for moving closer to the treasure
-        if new_distance < prev_distance:
-            reward += 0.01  # Small positive reward
-        else:
-            reward -= 0.01  # Small negative reward
+        # # Reward for moving closer to the treasure
+        # if new_distance < prev_distance:
+        #     reward += 0.01  # Small positive reward
+        # else:
+        #     reward -= 0.01  # Small negative reward
 
         # Small penalty per step to encourage efficiency
         reward -= 0.001
