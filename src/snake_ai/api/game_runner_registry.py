@@ -57,7 +57,8 @@ class GameRunnerRegistry:
         await runner.attach(sink)
         return runner
 
-    async def detach(self, sink: WebSocketSink, game_runner: GameRunner):
+    @staticmethod
+    async def detach(sink: WebSocketSink, game_runner: GameRunner):
         """Detaches a sink from its runner, see ``GameRunner.detach``.
 
         Args:

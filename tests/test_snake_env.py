@@ -169,7 +169,7 @@ def test_filling_the_board_wins(env):
 
 
 def test_moves_after_game_over_do_nothing(env):
-    env.game_over()
+    env.set_game_over()
     before = [list(p) for p in env.snake_position]
 
     reward, _, lost, _ = env.perform_move("RIGHT")

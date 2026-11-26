@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 # Direction channels of the encoded state. Their order matches
-# ``session.game.ACTIONS``, so channel ``c`` belongs to action ``c - 3``.
+# ``snake.snake_env.ACTIONS``, so channel ``c`` belongs to action ``c - 3``.
 _DIR_TO_CHANNEL = {"UP": 3, "DOWN": 4, "LEFT": 5, "RIGHT": 6}
 # The opposite action of each action index (UP <-> DOWN, LEFT <-> RIGHT).
 _REVERSE = [1, 0, 3, 2]
@@ -134,7 +134,7 @@ class Policy(nn.Module):
                 as returned by ``SnakeEnv.get_state``.
 
         Returns:
-            An action index into ``session.game.ACTIONS``.
+            An action index into ``snake.snake_env.ACTIONS``.
         """
         return self.get_move(self.encode_state(plain_state))
 
@@ -152,7 +152,7 @@ class Policy(nn.Module):
 
         Returns:
             A bool tensor of shape ``(4,)`` or ``(B, 4)`` in the order of
-            ``session.game.ACTIONS``, True for the reversing action.
+            ``snake.snake_env.ACTIONS``, True for the reversing action.
         """
         direction = state[..., 0, 0, 3:7] > 0.5
         return direction[..., _REVERSE]

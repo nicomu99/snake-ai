@@ -16,7 +16,7 @@ class PolicyModel(nn.Module):
     linear layer's input size is derived from ``utils.constants.TILE_COUNT``,
     so saved weights only fit a model built with the same ``TILE_COUNT``.
 
-    The four outputs are in the order of ``session.game.ACTIONS``:
+    The four outputs are in the order of ``snake.snake_env.ACTIONS``:
     ``UP``, ``DOWN``, ``LEFT``, ``RIGHT``.
 
     Args:

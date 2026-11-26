@@ -2,13 +2,13 @@
 
 A Snake game played by a Double-DQN agent (PyTorch) on a 5×5 board that wraps at the edges.
 
-| Part | Where | What it does |
-|---|---|---|
-| Backend | `src/snake_ai/` | FastAPI server: runs the games and streams them over a WebSocket (`/ws/play`), plus HTTP routes under `/api` |
-| Frontend | `frontend/` | Vite + React + TypeScript web app that shows and controls the games |
-| Local GUI | `src/snake_ai/local_main.py` | Tkinter window that plays (or trains) without a server |
-| Models | `policy_models/` | Trained policies (`*.pt`) and the catalog `models.json` |
-| Deployment | `Dockerfile`, `frontend/Dockerfile`, `k8s/` | Container images and Kubernetes manifests |
+| Part       | Where                                       | What it does                                                                                                 |
+|------------|---------------------------------------------|--------------------------------------------------------------------------------------------------------------|
+| Backend    | `src/snake_ai/`                             | FastAPI server: runs the games and streams them over a WebSocket (`/ws/play`), plus HTTP routes under `/api` |
+| Frontend   | `frontend/`                                 | Vite + React + TypeScript web app that shows and controls the games                                          |
+| Local GUI  | `src/snake_ai/local_main.py`                | Tkinter window that plays (or trains) without a server                                                       |
+| Models     | `policy_models/`                            | Trained policies (`*.pt`) and the catalog `models.json`                                                      |
+| Deployment | `Dockerfile`, `frontend/Dockerfile`, `k8s/` | Container images and Kubernetes manifests                                                                    |
 
 **Contents:** [Requirements](#requirements) · [Install](#install) · [Run locally](#run-locally) · [Configuration](#configuration) · [Docker](#docker) · [Kubernetes](#kubernetes) · [TODO](#todo)
 
@@ -69,11 +69,11 @@ More frontend details are in [frontend/README.md](frontend/README.md).
 uv run python -m snake_ai.local_main [--model FILE] [--train] [--seed N]
 ```
 
-| Flag | Default | Effect |
-|---|---|---|
-| `--model FILE` | `dqn-1m.pt` | Model to play with: a file name in the model directory (`policy_models/`), or an absolute path |
-| `--train` | off | Train a new policy first, save a checkpoint every 100k steps and the final model as `<timestamp>_model__lr<lr>_g<gamma>_s<steps>.pt` in the model directory, then play with it |
-| `--seed N` | `42` | Seed for torch, the food placement and training, so runs are reproducible |
+| Flag           | Default          | Effect                                                                                         |
+|----------------|------------------|------------------------------------------------------------------------------------------------|
+| `--model FILE` | `dqn-800k-v2.pt` | Model to play with: a file name in the model directory (`policy_models/`), or an absolute path |
+| `--train`      | off              | Train a new policy first, checkpoints saved every 100k steps, then play with it                |
+| `--seed N`     | `42`             | Seed for torch, the food placement and training, so runs are reproducible                      |
 
 Examples:
 
@@ -87,13 +87,13 @@ uv run python -m snake_ai.local_main --train --seed 7        # train, then play
 
 The backend (and the local GUI) read `SNAKE_AI_*` environment variables. Relative paths are resolved against the current directory.
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `SNAKE_AI_LOG_LEVEL` | `INFO` | Log level (upper case) |
-| `SNAKE_AI_LOG_PATH` | `<repo>/logs/app.log` | Log file |
-| `SNAKE_AI_MODEL_PATH` | `<repo>/policy_models` | Model directory |
-| `SNAKE_AI_MODEL_CATALOG` | `<model path>/models.json` | Catalog of the models the server offers |
-| `SNAKE_AI_MAX_GAME_COUNT` | `50` | Maximum number of games at once; the oldest one is closed when a new one exceeds it |
+| Variable                  | Default                    | Meaning                                                                             |
+|---------------------------|----------------------------|-------------------------------------------------------------------------------------|
+| `SNAKE_AI_LOG_LEVEL`      | `INFO`                     | Log level (upper case)                                                              |
+| `SNAKE_AI_LOG_PATH`       | `<repo>/logs/app.log`      | Log file                                                                            |
+| `SNAKE_AI_MODEL_PATH`     | `<repo>/policy_models`     | Model directory                                                                     |
+| `SNAKE_AI_MODEL_CATALOG`  | `<model path>/models.json` | Catalog of the models the server offers                                             |
+| `SNAKE_AI_MAX_GAME_COUNT` | `50`                       | Maximum number of games at once; the oldest one is closed when a new one exceeds it |
 
 ## Docker
 
@@ -148,6 +148,18 @@ kubectl apply -f k8s/backend_deploy.yaml -f k8s/backend_svc.yaml \
 minikube service frontend-svc              # opens the frontend in the browser
 ```
 
+Locally, the frontend can be accessed through port-forwarding. This is a dev-environment solution, since the ingress is configured for GCP:
+
+```bash
+kubectl port-forward svc/frontend-svc 8080:80
+```
+
+To tear down the cluster, run 
+
+```bash
+minikube delete
+```
+
 To use images you built locally instead of the ones on Docker Hub, build them inside minikube with the tags from the manifests (they use `imagePullPolicy: IfNotPresent`):
 
 ```bash
@@ -159,24 +171,7 @@ minikube image build -t muellern99/snake-ai-frontend:1.0.0 frontend
 
 Effort: 🟢 quick (under an hour) · 🟡 medium (a few hours) · 🔴 large (a day or more, or needs retraining)
 
-Within each category, bugs come first, then unfinished features, then cleanup.
-
-### Agent & training
-
-- [ ] 🔴 Train more agents, and ideally better ones.
-  - Make the hyperparameters configurable (CLI flags or a config file) instead of hard-coding them in `DQNTrainer.__init__`, and save them next to each `.pt` file, so runs can be reproduced and compared.
-  - Ideas to try: longer runs, different epsilon schedules, prioritized replay, a dueling network head, n-step returns.
-  - Add each good model to `policy_models/models.json` so it shows up in the frontend's model picker.
-
 ### Deployment
 
-- [x] 🔴 Run the setup on a Kubernetes cluster.
-  - [x] 🟡 Dockerfiles: one for the backend (uv, with the models baked into the image or mounted from a volume), and one for the frontend (`npm run build`, served by nginx), unless FastAPI serves `frontend/dist` itself.
-  - [x] 🟡 Manifests (or a Helm chart): a Deployment and a Service for the backend, plus an Ingress that routes `/ws` to the backend with WebSocket support and `/` to the frontend. Pass the `SNAKE_AI_*` settings through a ConfigMap.
-  - [x] 🟢 Add a health endpoint for the liveness and readiness probes.
 - [ ] 🔴 Implement the Redis-backed registry: `save` and `delete` are stubs and the Redis code is commented out.
   - Games live in the server process's memory, so start with one backend replica. With more replicas, reconnecting by `game_id` only works with sticky sessions or the Redis-backed registry.
-
-### Testing
-
-- [ ] 🟡 Add tests. There are none yet. Good first targets are `SnakeEnv` (moves, wrapping, eating, winning, losing), `parse_message`, and the `GameRunner` lifecycle (attach, detach, expire).

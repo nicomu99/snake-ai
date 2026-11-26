@@ -18,6 +18,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 
 from snake_ai.ai.evaluate import evaluate
 from snake_ai.ai.policy import Policy
+from snake_ai.snake import SnakeEnv
 from snake_ai.utils import TILE_COUNT
 
 logger = logging.getLogger(__name__)
@@ -171,7 +172,7 @@ class DQNTrainer:
         self.model_id = f"_lr{lr}_g{gamma}"
         self.summary_writer = SummaryWriter(comment=self.model_id)
 
-    def train(self, env, model_path: str | Path):
+    def train(self, env: SnakeEnv, model_path: str | Path):
         """Trains the policy and saves its weights.
 
         Runs ``run_train``, which also saves a checkpoint after every
@@ -179,8 +180,7 @@ class DQNTrainer:
         The environment is reset afterward.
 
         Args:
-            env: The environment to train on, usually a ``Game``. See
-                ``run_train`` for what it must provide.
+            env: The environment to train on.
             model_path: The directory the checkpoints and the trained model
                 are saved to.
         """
@@ -217,7 +217,7 @@ class DQNTrainer:
         """Copies the policy network's weights into the target network."""
         self.target_model.load_state_dict(self.policy.state_dict())
 
-    def play_one_step(self, state, env):
+    def play_one_step(self, state, env: SnakeEnv):
         """Picks an epsilon-greedy action and applies it to the environment.
 
         With probability ``epsilon`` a random action is taken, otherwise the
@@ -229,8 +229,7 @@ class DQNTrainer:
 
         Args:
             state: The current encoded state.
-            env: The environment to step. It must provide
-                ``is_invalid_move(action)`` and ``step(action)``.
+            env: The environment to step.
 
         Returns:
             A ``(reward, new_state, action, done)`` tuple, where ``new_state``
@@ -243,11 +242,11 @@ class DQNTrainer:
         else:
             action = self.policy.get_move(state)
 
-        reward, new_state, lost, won = env.step(action)
+        reward, new_state, lost, won = env.perform_move(action)
         new_state = self.policy.encode_state(new_state)
         return reward, new_state, action, lost or won
 
-    def run_train(self, env, model_path: str | Path):
+    def run_train(self, env: SnakeEnv, model_path: str | Path):
         """Runs the training loop for ``train_steps`` environment steps.
 
         Each step plays one epsilon-greedy move, stores the transition,
@@ -263,10 +262,7 @@ class DQNTrainer:
         the end.
 
         Args:
-            env: The environment to train on, usually a ``Game``. It must
-                provide ``reset()``, ``step(action)``,
-                ``is_invalid_move(action)``, ``step_count`` and
-                ``snake_env`` (for the episode metrics).
+            env: The environment to train on.
             model_path: The directory the checkpoints are saved to.
         """
         state = self.policy.encode_state(env.reset())
@@ -289,14 +285,14 @@ class DQNTrainer:
                         self.epsilon_start - self.epsilon_min)
 
                 if done:
-                    recent_outcomes.append(env.snake_env.get_game_state())
+                    recent_outcomes.append(env.get_game_state())
                     counts = Counter(recent_outcomes)
                     n = len(recent_outcomes)
 
                     episode += 1
                     episode_dict = {
                         "episode/return": episode_score,
-                        "episode/food": env.snake_env.score,
+                        "episode/food": env.score,
                         "episode/length": env.step_count,
                         "episode/win_rate": counts["game_won"] / n,
                         "episode/collision_rate": counts["collision"] / n,

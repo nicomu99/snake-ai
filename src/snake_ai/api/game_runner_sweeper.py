@@ -27,14 +27,14 @@ class GameRunnerSweeper:
         self.registry = registry
 
     async def _loop(self):
-        """Runs a sweep every ``delay`` seconds until cancelled."""
+        """Runs a sweep every ``delay`` seconds until canceled."""
         logger.info("Starting GameRunnerSweeper with delay %.2f", self.delay)
         while True:
             await asyncio.sleep(self.delay)
             try:
                 self.registry.remove_expired(time.monotonic())
-            except Exception:
-                logger.exception("Sweeper pass failed")
+            except Exception as e:
+                logger.exception("Sweeper pass failed", exc_info=e)
 
     def start(self):
         """Starts the sweeper task. Does nothing if it is already running.

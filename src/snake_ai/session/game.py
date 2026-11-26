@@ -1,9 +1,4 @@
-"""A headless Snake game that an agent can play.
-
-Attributes:
-    ACTIONS (tuple[str, ...]): Maps the agent's action indices to directions.
-        The order must match the outputs of ``PolicyModel``.
-"""
+"""A headless Snake game that an agent can play."""
 
 import copy
 import logging
@@ -13,21 +8,15 @@ from snake_ai.snake.snake_env import SnakeEnv
 
 logger = logging.getLogger(__name__)
 
-# Index = action int produced by the agent
-ACTIONS = ("UP", "DOWN", "LEFT", "RIGHT")
-
 
 class Game:
     """A headless game core that knows nothing about how it is displayed.
 
-    ``Game`` wraps a ``SnakeEnv``, lets a ``Policy`` choose moves, counts
-    steps and notifies subscribed listeners with a serializable snapshot
-    after every move and reset. Frontends (the WebSocket server, the Tk GUI)
-    build on top of it.
-
-    ``Game`` also provides ``reset()``, ``step(action)`` and
-    ``is_invalid_move(action)``, so it can be passed to
-    ``DQNTrainer.train`` as the training environment.
+    ``Game`` wraps a ``SnakeEnv``, lets a ``Policy`` choose moves and
+    notifies subscribed listeners with a serializable snapshot after every
+    move and reset. Frontends (the WebSocket server, the Tk GUI) build on
+    top of it. Training doesn't use ``Game``; ``DQNTrainer`` works on a
+    ``SnakeEnv`` directly.
 
     Args:
         policy: The policy that picks moves in ``agent_step``. It can be
@@ -36,17 +25,12 @@ class Game:
     Attributes:
         snake_env: The underlying game state and rules.
         policy: The policy used by ``agent_step``.
-        step_count: The number of moves since the last reset. Moves made
-            after the game has ended are not counted.
-        game_finished: Whether the current game has been lost or won.
     """
 
     def __init__(self, policy: Policy):
-        self.game_finished = False
         self.snake_env = SnakeEnv()
         self.policy = policy
         self._listeners = []
-        self.step_count = 0
 
     def subscribe(self, listener):
         """Registers a listener that is called after every move and reset.
@@ -66,60 +50,11 @@ class Game:
         Returns:
             The plain state of the new game, see ``SnakeEnv.get_state``.
         """
-        self.game_finished = False
-        self.step_count = 0
         state = self.snake_env.reset(seed)
         self._notify()
         return state
 
-    @staticmethod
-    def transform_move(action: int | str) -> str:
-        """Validates an action and converts it to a direction string.
-
-        This only checks that the action is a known value. It does not check
-        the game rules; see ``SnakeEnv.is_invalid_move`` for that.
-
-        Args:
-            action: A direction string (``"UP"``, ``"DOWN"``, ``"LEFT"``,
-                ``"RIGHT"``) or an index into ``ACTIONS``.
-
-        Returns:
-            The direction string.
-
-        Raises:
-            ValueError: If ``action`` is not a valid direction or index.
-        """
-        if isinstance(action, int):
-            if action < 0 or action > 3:
-                raise ValueError(
-                    "Invalid action value. Must be between 0 and 3 inclusive.")
-            direction = ACTIONS[action] if isinstance(action, int) else action
-        else:
-            if action not in ACTIONS:
-                raise ValueError(f"Invalid action value. Must be in {ACTIONS}")
-            direction = action
-        return str(direction)
-
-    def is_invalid_move(self, action: str | int):
-        """Returns whether an action would reverse the snake's direction.
-
-        A reversal loses the game, see ``SnakeEnv.is_invalid_move``. The
-        trainer uses this to keep random exploration from reversing.
-
-        Args:
-            action: A direction string or an index into ``ACTIONS``.
-
-        Returns:
-            True if the action is the opposite of the current direction.
-            Always False before the first move.
-
-        Raises:
-            ValueError: If ``action`` is not a valid direction or index.
-        """
-        direction = self.transform_move(action)
-        return self.snake_env.is_invalid_move(direction)
-
-    def step(self, action):
+    def step(self, action: int | str):
         """Performs one move and notifies the listeners.
 
         Once the game is lost or won, further moves leave the board as it
@@ -128,7 +63,7 @@ class Game:
 
         Args:
             action: A direction string (``"UP"``, ``"DOWN"``, ``"LEFT"``,
-                ``"RIGHT"``) or an index into ``ACTIONS``.
+                ``"RIGHT"``) or an index into ``snake.snake_env.ACTIONS``.
 
         Returns:
             A ``(reward, state, lost, won)`` tuple, see
@@ -137,14 +72,7 @@ class Game:
         Raises:
             ValueError: If ``action`` is not a valid direction or index.
         """
-        direction = self.transform_move(action)
-        logger.debug("Performing move into direction %s", direction)
-
-        reward, state, lost, won = self.snake_env.perform_move(direction)
-        if not self.game_finished:
-            self.step_count += 1
-        if lost or won:
-            self.game_finished = True
+        reward, state, lost, won = self.snake_env.perform_move(action)
         self._notify()
         return reward, state, lost, won
 
@@ -174,7 +102,7 @@ class Game:
             "lost": self.snake_env.lost,
             "won": self.snake_env.won,
             "game_state": self.snake_env.get_game_state(),
-            "step_count": self.step_count,
+            "step_count": self.snake_env.step_count,
         }
 
     def _notify(self):
@@ -212,8 +140,8 @@ class Game:
         """Restores a game from a dict made by ``to_dict``.
 
         The dict may have gone through JSON. Its values are copied, so the
-        dict and the restored game don't share lists. ``game_finished`` is
-        derived from ``lost`` and ``won``, and the ``game_state`` key is
+        dict and the restored game don't share lists. ``SnakeEnv.game_finished``
+        is derived from ``lost`` and ``won``, and the ``game_state`` key is
         ignored. Listeners are not restored, so callers have to subscribe
         again.
 
@@ -229,14 +157,14 @@ class Game:
             KeyError: If a key written by ``to_dict`` is missing.
         """
         game = cls(policy)
-        game.step_count = game_state["step_count"]
+        game.snake_env.step_count = game_state["step_count"]
         game.snake_env.snake_position = copy.deepcopy(game_state["snake"])
         game.snake_env.last_snake_position = copy.deepcopy(
             game_state["last_snake_position"])
         game.snake_env.direction = game_state["direction"]
         game.snake_env.lost = game_state["lost"]
         game.snake_env.won = game_state["won"]
-        game.game_finished = game_state["lost"] or game_state["won"]
+        game.snake_env.game_finished = game_state["lost"] or game_state["won"]
         game.snake_env.score = game_state["score"]
         game.snake_env.price_position = copy.deepcopy(game_state["food"])
 

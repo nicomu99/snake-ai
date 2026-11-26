@@ -1,4 +1,9 @@
-"""The Snake game rules, including reward shaping for training."""
+"""The Snake game rules, including reward shaping for training.
+
+Attributes:
+    ACTIONS (tuple[str, ...]): Maps action indices to directions. The order
+        must match the outputs of ``PolicyModel``.
+"""
 import copy
 import logging
 from random import Random
@@ -6,6 +11,9 @@ from random import Random
 from snake_ai.utils import TILE_COUNT
 
 logger = logging.getLogger(__name__)
+
+# Index = action int produced by the agent
+ACTIONS = ("UP", "DOWN", "LEFT", "RIGHT")
 
 
 class SnakeEnv:
@@ -32,6 +40,9 @@ class SnakeEnv:
             first move.
         lost: Whether the game is lost.
         won: Whether the game is won.
+        game_finished: Whether the game is lost or won.
+        step_count: The number of moves since the last reset. Moves made
+            after the game has ended are not counted.
         score: The amount of food eaten.
         price_position: The food's ``[x, y]`` position.
     """
@@ -44,6 +55,7 @@ class SnakeEnv:
         self.direction = None
         self.lost = False
         self.won = False
+        self.game_finished = False
         self.score = 0
         self.price_position = None
         self.step_count = 0
@@ -68,6 +80,7 @@ class SnakeEnv:
         self.direction = None
         self.lost = False
         self.won = False
+        self.game_finished = False
         self.score = 0
         self.step_count = 0
 
@@ -83,10 +96,6 @@ class SnakeEnv:
     def is_snake_collision(self):
         """Returns whether the snake's head overlaps its body."""
         return self.snake_position[0] in self.snake_position[1:]
-
-    def game_over(self):
-        """Marks the game as lost."""
-        self.lost = True
 
     def game_won(self) -> bool:
         """Returns whether the snake fills the whole board."""
@@ -116,6 +125,16 @@ class SnakeEnv:
             return "direction_reversal"
         return "pending"
 
+    def set_game_over(self):
+        """Marks the game as lost."""
+        self.lost = True
+        self.game_finished = True
+
+    def set_game_won(self):
+        """Marks the game as won."""
+        self.won = True
+        self.game_finished = True
+
     def handle_collision(self) -> bool:
         """Grows the snake after eating and places new food.
 
@@ -129,7 +148,7 @@ class SnakeEnv:
         # add new square to snake
         self.snake_position.append(self.last_snake_position)
         if self.game_won():
-            self.won = True
+            self.set_game_won()
             return True
 
         self._generate_price()
@@ -178,19 +197,24 @@ class SnakeEnv:
         dy = min(dy, grid_size - dy)
         return (dx * dx + dy * dy) ** 0.5
 
-    def is_invalid_move(self, direction) -> bool:
+    def is_invalid_move(self, direction: str | int) -> bool:
         """Returns whether a move would reverse the snake's direction.
 
         Reversing loses the game in ``perform_move``. It does not depend on
         the snake's length, so a one-tile snake can't reverse either.
 
         Args:
-            direction: ``"UP"``, ``"DOWN"``, ``"LEFT"`` or ``"RIGHT"``.
+            direction: ``"UP"``, ``"DOWN"``, ``"LEFT"``, ``"RIGHT"`` or an
+                index into ``ACTIONS``.
 
         Returns:
             True if ``direction`` is the opposite of the current direction.
             Always False before the first move, when ``direction`` is None.
+
+        Raises:
+            ValueError: If ``direction`` is not a valid direction or index.
         """
+        direction = self.transform_move(direction)
         if (
             self.direction == "DOWN" and direction == "UP" or
             self.direction == "UP" and direction == "DOWN" or
@@ -200,7 +224,35 @@ class SnakeEnv:
             return True
         return False
 
-    def perform_move(self, direction):
+    @staticmethod
+    def transform_move(action: int | str) -> str:
+        """Validates an action and converts it to a direction string.
+
+        This only checks that the action is a known value. It does not check
+        the game rules; see ``SnakeEnv.is_invalid_move`` for that.
+
+        Args:
+            action: A direction string (``"UP"``, ``"DOWN"``, ``"LEFT"``,
+                ``"RIGHT"``) or an index into ``ACTIONS``.
+
+        Returns:
+            The direction string.
+
+        Raises:
+            ValueError: If ``action`` is not a valid direction or index.
+        """
+        if isinstance(action, int):
+            if action < 0 or action > 3:
+                raise ValueError(
+                    "Invalid action value. Must be between 0 and 3 inclusive.")
+            direction = ACTIONS[action]
+        else:
+            if action not in ACTIONS:
+                raise ValueError(f"Invalid action value. Must be in {ACTIONS}")
+            direction = action
+        return str(direction)
+
+    def perform_move(self, action: int | str):
         """Moves the snake one tile and returns the shaped reward.
 
         If the game is already lost or won, nothing happens and the reward
@@ -216,27 +268,29 @@ class SnakeEnv:
            distance), -0.01 if not, and -0.001 per step on top.
 
         Args:
-            direction: ``"UP"``, ``"DOWN"``, ``"LEFT"`` or ``"RIGHT"``.
+            action: ``"UP"``, ``"DOWN"``, ``"LEFT"``, ``"RIGHT"`` or an
+                index into ``ACTIONS``.
 
         Returns:
             A ``(reward, state, lost, won)`` tuple, where ``state`` is the
             result of ``get_state``.
 
         Raises:
-            ValueError: If ``direction`` is not one of the four directions.
+            ValueError: If ``action`` is not a valid direction or index.
+                Not raised once the game is over.
         """
-        if self.won or self.lost:
+        if self.game_finished:
             return 0, self.get_state(), self.lost, self.won
 
-        if direction not in ["DOWN", "UP", "LEFT", "RIGHT"]:
-            raise ValueError(f"Invalid direction detected {direction}")
+        direction = self.transform_move(action)
+        logger.debug("Performing move into direction %s", direction)
 
         self.step_count += 1
 
         # Check for invalid move (reversing direction)
         if self.is_invalid_move(direction):
             logger.debug("Move into direction %s invalid", direction)
-            self.game_over()
+            self.set_game_over()
             return -2, self.get_state(), self.lost, self.won
 
         self.last_snake_position = list(self.snake_position[-1])
@@ -271,7 +325,7 @@ class SnakeEnv:
 
         # Check collision with snake (self-collision)
         if self.is_snake_collision():
-            self.game_over()
+            self.set_game_over()
             reward -= 2  # Increased penalty for collision
             return reward, self.get_state(), self.lost, self.won
 

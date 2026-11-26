@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: muellern99/snake-ai-frontend:1.0.1
+          image: muellern99/snake-ai-frontend:1.0.2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

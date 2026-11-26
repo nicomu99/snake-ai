@@ -6,8 +6,6 @@ from tqdm import tqdm
 from snake_ai.ai.policy import Policy
 from snake_ai.snake import SnakeEnv
 
-ACTIONS = ("UP", "DOWN", "LEFT", "RIGHT")
-
 
 def evaluate(
     policy: Policy,
@@ -74,7 +72,6 @@ def evaluate(
                     snake_env.step_count < max_steps
             ):
                 action = policy.act(snake_env.get_state())
-                action = ACTIONS[action]
                 snake_env.perform_move(action)
 
             score_list.append(snake_env.score)

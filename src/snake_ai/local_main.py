@@ -18,6 +18,7 @@ import torch
 from snake_ai.ai import DQNTrainer, Policy
 from snake_ai.gui import Controller, View
 from snake_ai.session import Game
+from snake_ai.snake import SnakeEnv
 from snake_ai.utils import configure_logging, get_settings
 
 
@@ -53,16 +54,15 @@ def main(train: bool, model_file: str, seed: int, **kwargs):
 
     if train:
         policy = Policy()
+        trainer = DQNTrainer(policy, seed=seed, **kwargs)
+        snake_env = SnakeEnv(seed)
+        trainer.train(snake_env, model_path=settings.model_path)
     else:
         policy = Policy.load_model(
             model_file=model_file, model_path=settings.model_path)
 
     game = Game(policy)
     game.reset(seed=seed)
-
-    if train:
-        agent = DQNTrainer(policy, seed=seed, **kwargs)
-        agent.train(game, model_path=settings.model_path)
 
     Controller(game, View()).run()
 
